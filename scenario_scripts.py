@@ -173,6 +173,10 @@ def mock_0935_output(previous_claims: List[Claim]) -> AgentRevisionOutput:
               text="Customer Success reports, second-hand, that Meridian IT expects to fix the credentials 'by end of week', and that Meridian's board pack already states 17 March.",
               qualifications=["Informal call. Nothing from Meridian in writing.", "'End of week' could mean any day up to Friday 14 March."]),
     ]
+    # Preserve practitioner-provided claims from earlier revisions (DP6).
+    for c in previous_claims:
+        if c.claim_type == "user_provided":
+            claims.append(c.model_copy(deep=True))
     return AgentRevisionOutput(
         situation_summary=(
             "Since 09:15, a manual staging test run (D07) has failed on the billing API v2 integration, and rc4 is blocked "

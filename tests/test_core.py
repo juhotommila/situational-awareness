@@ -88,11 +88,17 @@ def test_correction_persists_and_is_applied():
                                         note="Security team took over certificate renewals last week."))
     run = AgentRun(base, trigger="user_correction", provider=MockProvider())
     run.run_to_end()
-    new = run.finalize()
-    assert any(c.claim_type == "user_provided" for c in new.claims)
-    assert any("Disputed by the practitioner" in q for q in new.claim("C6").qualifications)
-    assert new.user_actions[0].applied_in_version == 2
-    assert new.pending_actions() == []
+    v2 = run.finalize()
+    assert any(c.claim_type == "user_provided" for c in v2.claims)
+    assert any("Disputed by the practitioner" in q for q in v2.claim("C6").qualifications)
+    assert v2.user_actions[0].applied_in_version == 2
+    assert v2.pending_actions() == []
+
+    # Correction claim must survive a subsequent 09:35 revision as well.
+    run2 = AgentRun(_release(v2), trigger="new_records", provider=MockProvider())
+    run2.run_to_end()
+    v3 = run2.finalize()
+    assert any(c.claim_type == "user_provided" and "Security team" in c.text for c in v3.claims)
 
 
 def test_stop_by_user():
