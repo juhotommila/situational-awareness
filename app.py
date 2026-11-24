@@ -1,4 +1,4 @@
-"""Stay in the Know – practitioner interface + researcher controls.
+"""Stay in the Know — practitioner interface and researcher controls.
 
 Run with:  streamlit run app.py
 """
@@ -22,8 +22,7 @@ ROOT = Path(__file__).parent
 load_dotenv(ROOT / ".env")
 
 st.set_page_config(
-    page_title="Stay in the Know – Inquiry Workspace",
-    page_icon="🧭",
+    page_title="Stay in the Know",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -32,140 +31,355 @@ ss = st.session_state
 E = html.escape
 
 TRIGGER_LABEL = {
-    "baseline": "Initial investigation",
-    "user_correction": "Practitioner correction",
-    "user_redirect": "Practitioner redirect",
-    "new_records": "New records (09:35)",
+    "baseline": "Baseline",
+    "user_correction": "Correction",
+    "user_redirect": "Redirect",
+    "new_records": "09:35 release",
     "reinvestigate": "Re-investigation",
 }
-MODE_LABEL = {"curated": "cached baseline", "mock": "scripted agent", "gemini": "live Gemini agent"}
+MODE_LABEL = {"curated": "baseline", "mock": "scripted", "gemini": "Gemini"}
 RELIANCE_LABEL = {
     "reliable": "Reliable",
-    "reliable_with_qualifications": "Reliable with qualifications",
-    "not_reliable": "Not reliable as stated",
+    "reliable_with_qualifications": "Qualified",
+    "not_reliable": "Not reliable",
     "undetermined": "Undetermined",
 }
 CLAIM_BADGE = {
-    "direct_record": ("Direct record", "b-direct"),
-    "agent_inference": ("Agent inference", "b-inference"),
-    "user_provided": ("Practitioner input", "b-user"),
+    "direct_record": ("Direct", "b-direct"),
+    "agent_inference": ("Inference", "b-inference"),
+    "user_provided": ("Practitioner", "b-user"),
 }
 STATUS_CLASS = {
-    "found": "s-ok", "concluded": "s-ok", "no_matches": "s-warn", "not_available": "s-warn",
-    "not_found": "s-err", "tool_error": "s-err",
+    "found": "s-ok",
+    "concluded": "s-ok",
+    "no_matches": "s-warn",
+    "not_available": "s-warn",
+    "not_found": "s-err",
+    "tool_error": "s-err",
 }
 
 
 # ---------------------------------------------------------------------------
-# Styling
+# Styling — Nordic editorial / academic register
 # ---------------------------------------------------------------------------
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-html, body, .stApp, .stMarkdown, button, input, textarea, select { font-family: 'Inter', system-ui, sans-serif !important; }
-.stApp {
-  background:
-    radial-gradient(1100px 520px at 8% -12%, rgba(124,156,255,0.14), transparent 60%),
-    radial-gradient(900px 480px at 100% -5%, rgba(192,132,252,0.10), transparent 60%),
-    #0B0E14;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap');
+
+:root {
+  --bg: #F8F7F4;
+  --surface: #FFFFFF;
+  --surface-muted: #F2F0EB;
+  --border: #E2DFD7;
+  --border-strong: #C9C5BA;
+  --ink: #1E242B;
+  --ink-muted: #5A626D;
+  --ink-faint: #7A828E;
+  --accent: #1F4E79;
+  --accent-bg: #EEF3F8;
+  --accent-bd: #C4D6E7;
+  --ok: #1E5A42;
+  --ok-bg: #EEF6F2;
+  --ok-bd: #C5DFD3;
+  --warn: #805308;
+  --warn-bg: #FCF6E9;
+  --warn-bd: #E5CFA0;
+  --err: #8A2C2C;
+  --err-bg: #FCF1F1;
+  --err-bd: #E6C3C3;
+  --inf: #424878;
+  --inf-bg: #F1F2FA;
+  --inf-bd: #D1D4EA;
 }
-.block-container { padding-top: 1.4rem; padding-bottom: 4rem; max-width: 1520px; }
+
+html, body, .stApp, .stMarkdown, button, input, textarea, select {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  color: var(--ink);
+}
+.stApp { background: var(--bg); }
+.block-container { padding-top: 1.5rem; padding-bottom: 3.5rem; max-width: 1380px; }
 header[data-testid="stHeader"] { background: transparent; }
-section[data-testid="stSidebar"] { background: #0F131C; border-right: 1px solid rgba(255,255,255,.06); }
+section[data-testid="stSidebar"] {
+  background: #F1EFEA;
+  border-right: 1px solid var(--border);
+}
 
-/* hero */
-.hero { padding: 1.1rem 1.3rem 1.0rem; border-radius: 18px; margin-bottom: 1rem;
-  background: linear-gradient(135deg, rgba(124,156,255,.10), rgba(192,132,252,.06) 60%, rgba(255,255,255,.02));
-  border: 1px solid rgba(124,156,255,.18); box-shadow: 0 10px 40px -20px rgba(124,156,255,.35); }
-.eyebrow { letter-spacing: .16em; font-size: .7rem; color: #8B93A7; font-weight: 600; text-transform: uppercase; }
-.hero h1 { font-size: 1.45rem !important; font-weight: 650 !important; line-height: 1.35 !important; margin: .35rem 0 .8rem !important; padding: 0 !important;
-  background: linear-gradient(90deg, #EEF1F8, #B4C3FF); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.chips { display: flex; flex-wrap: wrap; gap: .45rem; }
-.chip { font-size: .76rem; padding: .26rem .7rem; border-radius: 999px; background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.09); color: #C9CFDD; white-space: nowrap; }
-.chip.clock { background: rgba(124,156,255,.14); border-color: rgba(124,156,255,.4); color: #C7D2FF; font-weight: 600; }
-.rel-reliable { background: rgba(52,211,153,.12) !important; color: #6EE7B7 !important; border-color: rgba(52,211,153,.4) !important; }
-.rel-reliable_with_qualifications { background: rgba(251,191,36,.12) !important; color: #FCD34D !important; border-color: rgba(251,191,36,.4) !important; }
-.rel-not_reliable { background: rgba(248,113,113,.12) !important; color: #FCA5A5 !important; border-color: rgba(248,113,113,.45) !important; }
-.rel-undetermined { color: #9AA3B5 !important; }
+/* Header */
+.mast {
+  padding-bottom: .9rem;
+  margin-bottom: 1.15rem;
+  border-bottom: 1px solid var(--border-strong);
+}
+.mast-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: .45rem;
+}
+.mast-meta {
+  font-size: .78rem;
+  color: var(--ink-muted);
+  letter-spacing: .01em;
+}
+.mast-meta b { color: var(--ink); font-weight: 600; }
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: .76rem; }
+.mast h1 {
+  font-family: 'Source Serif 4', Georgia, serif !important;
+  font-size: 1.48rem !important;
+  font-weight: 600 !important;
+  line-height: 1.32 !important;
+  color: var(--ink) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 62ch;
+}
 
-/* generic cards: any container with key starting card- */
+/* Reliance pills */
+.rel {
+  display: inline-block;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: .2rem .55rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+}
+.rel-reliable { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
+.rel-reliable_with_qualifications { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
+.rel-not_reliable { background: var(--err-bg); color: var(--err); border-color: var(--err-bd); }
+.rel-undetermined { background: var(--surface-muted); color: var(--ink-muted); }
+
+/* Cards */
 div[class*="st-key-card-"] {
-  background: linear-gradient(180deg, rgba(23,28,40,.92), rgba(17,21,31,.92));
-  border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: .95rem 1.05rem .55rem;
-  transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
-div[class*="st-key-card-"]:hover { border-color: rgba(124,156,255,.35); box-shadow: 0 8px 30px -18px rgba(124,156,255,.5); }
-div[class*="st-key-card-focus"] { border-color: rgba(124,156,255,.7) !important; box-shadow: 0 0 0 3px rgba(124,156,255,.18); }
-div[class*="st-key-card-locked"] { opacity: .55; }
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .85rem 1rem .95rem !important;
+  margin-bottom: .25rem;
+}
+div[class*="st-key-card-"] div[data-testid="stMarkdownContainer"] p:last-child {
+  margin-bottom: 0;
+}
+div[class*="st-key-card-focus"] {
+  border-color: var(--accent) !important;
+  border-left-width: 3px !important;
+}
+div[class*="st-key-card-locked"] {
+  background: var(--surface-muted);
+  opacity: .75;
+}
 div[class*="st-key-panel-"] {
-  background: rgba(17,21,31,.85); border: 1px solid rgba(124,156,255,.22); border-radius: 16px; padding: 1rem 1rem .6rem; }
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .9rem .95rem .65rem;
+}
 
-.section-title { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: #8B93A7; font-weight: 650; margin: 1.4rem 0 .6rem; display:flex; align-items:center; gap:.5rem; }
-.section-title .dp { font-size: .64rem; letter-spacing: .06em; color: #7C9CFF; background: rgba(124,156,255,.12); padding: .08rem .4rem; border-radius: 6px; }
-.legend { font-size: .78rem; color: #8B93A7; margin: -.2rem 0 .7rem; }
+/* Section headings */
+.sec-h {
+  font-size: .72rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+  margin: 1.35rem 0 .55rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--border);
+}
 
-.badge { display: inline-block; font-size: .68rem; font-weight: 650; letter-spacing: .04em; padding: .16rem .5rem; border-radius: 6px; margin-right: .35rem; vertical-align: middle; text-transform: uppercase; }
-.b-direct { background: rgba(45,212,191,.13); color: #5EEAD4; border: 1px solid rgba(45,212,191,.35); }
-.b-inference { background: rgba(192,132,252,.13); color: #D8B4FE; border: 1px solid rgba(192,132,252,.35); }
-.b-user { background: rgba(56,189,248,.13); color: #7DD3FC; border: 1px solid rgba(56,189,248,.35); }
-.b-new { background: rgba(52,211,153,.15); color: #6EE7B7; border: 1px solid rgba(52,211,153,.4); }
-.b-rev { background: rgba(251,191,36,.14); color: #FCD34D; border: 1px solid rgba(251,191,36,.4); }
-.b-id { background: rgba(255,255,255,.06); color: #AEB6C8; border: 1px solid rgba(255,255,255,.1); font-family: 'JetBrains Mono', monospace; }
-.b-active { background: rgba(124,156,255,.14); color: #C7D2FF; border: 1px solid rgba(124,156,255,.4); }
-.b-invalid { background: rgba(248,113,113,.14); color: #FCA5A5; border: 1px solid rgba(248,113,113,.45); }
-.b-retired { background: rgba(148,163,184,.12); color: #CBD5E1; border: 1px solid rgba(148,163,184,.35); }
+/* Badges */
+.b {
+  display: inline-block;
+  font-size: .67rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: .12rem .42rem;
+  border-radius: 3px;
+  margin-right: .3rem;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+.b-id {
+  font-family: 'IBM Plex Mono', monospace;
+  background: var(--surface-muted);
+  color: var(--ink);
+  border-color: var(--border);
+}
+.b-direct { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
+.b-inference { background: var(--inf-bg); color: var(--inf); border-color: var(--inf-bd); }
+.b-user { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-bd); }
+.b-new { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
+.b-rev { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
+.b-active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-bd); }
+.b-invalid { background: var(--err-bg); color: var(--err); border-color: var(--err-bd); }
+.b-retired { background: var(--surface-muted); color: var(--ink-muted); border-color: var(--border); }
 
-.claim-text { font-size: .97rem; line-height: 1.55; color: #E6E9F2; margin: .45rem 0 .3rem; }
-.conflict { border-left: 3px solid #F59E0B; background: rgba(245,158,11,.08); padding: .45rem .7rem; border-radius: 8px; font-size: .84rem; margin-top: .45rem; color: #F5D9A8; }
-.qual { color: #9AA3B5; font-size: .83rem; margin-top: .3rem; }
-.qual::before { content: "↳ "; color: #5B6478; }
+/* Text blocks */
+.summary { font-size: .95rem; line-height: 1.6; color: var(--ink); }
+.assess { margin-top: .5rem; font-size: .86rem; line-height: 1.5; color: var(--ink-muted); }
+.claim-text { font-size: .92rem; line-height: 1.55; color: var(--ink); margin: .4rem 0 .25rem; }
+.conflict {
+  border-left: 2px solid #B57B14;
+  background: var(--warn-bg);
+  padding: .38rem .65rem;
+  border-radius: 0 4px 4px 0;
+  font-size: .82rem;
+  line-height: 1.45;
+  margin-top: .35rem;
+  color: #5C3D06;
+}
+.qual { color: var(--ink-muted); font-size: .81rem; line-height: 1.45; margin-top: .22rem; }
+.qual::before { content: "— "; color: var(--ink-faint); }
+.meta { font-size: .77rem; color: var(--ink-faint); }
 
-.summary { font-size: 1.02rem; line-height: 1.6; color: #E6E9F2; }
-.assess { margin-top: .6rem; font-size: .9rem; color: #B9C1D3; }
+/* Revision banner & 09:35 notice */
+.changed {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-bd);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: .75rem 1rem;
+  margin-bottom: .8rem;
+}
+.changed-head { font-size: .84rem; font-weight: 600; color: var(--accent); margin-bottom: .2rem; }
+.changed ul { margin: .3rem 0 0 1.05rem; padding: 0; }
+.changed li { font-size: .85rem; line-height: 1.45; margin: .15rem 0; color: var(--ink); }
+.diff-added { color: var(--ok); }
+.diff-withdrawn, .diff-before { color: var(--ink-faint); text-decoration: line-through; }
 
-.changed { border-radius: 16px; padding: 1rem 1.2rem; margin-bottom: .8rem; animation: slidein .55s ease;
-  background: linear-gradient(135deg, rgba(124,156,255,.16), rgba(192,132,252,.09)); border: 1px solid rgba(124,156,255,.4); }
-.changed h3 { font-size: 1rem !important; margin: 0 0 .35rem !important; padding: 0 !important; color: #DCE3FF; }
-.changed ul { margin: .3rem 0 0 1.1rem; padding: 0; }
-.changed li { font-size: .9rem; margin: .18rem 0; color: #DDE2EE; }
-.meta-line { font-size: .78rem; color: #9AA3B5; }
-.diff-added { color: #6EE7B7; } .diff-withdrawn { color: #FCA5A5; text-decoration: line-through; } .diff-before { color: #8B93A7; text-decoration: line-through; }
+.notice {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-bd);
+  border-left: 3px solid #B57B14;
+  border-radius: 4px;
+  padding: .6rem .9rem;
+  margin-bottom: .5rem;
+  font-size: .86rem;
+  color: #5C3D06;
+}
 
-.newrec { border-radius: 14px; padding: .8rem 1.1rem; margin-bottom: .6rem; display:flex; align-items:center; gap:.8rem;
-  background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.45); animation: pulse 2.4s infinite; color: #FDE68A; font-size: .92rem; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(251,191,36,.35);} 70% { box-shadow: 0 0 0 12px rgba(251,191,36,0);} 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0);} }
-@keyframes slidein { from { opacity: 0; transform: translateY(-6px);} to { opacity: 1; transform: none; } }
+/* Projections */
+.outcome { font-size: .9rem; line-height: 1.5; color: var(--ink); margin: .4rem 0 .35rem; }
+.invalid .outcome { text-decoration: line-through; text-decoration-color: var(--err); color: var(--ink-faint); }
+.assume { font-size: .81rem; line-height: 1.45; color: var(--ink-muted); margin: .12rem 0; }
+.assume::before { content: "· "; font-weight: 700; color: var(--accent); }
+.inval-note {
+  margin-top: .45rem;
+  border-left: 2px solid var(--err);
+  background: var(--err-bg);
+  padding: .38rem .6rem;
+  border-radius: 0 4px 4px 0;
+  font-size: .81rem;
+  color: var(--err);
+}
 
-.outcome { font-size: .95rem; line-height: 1.5; color: #E6E9F2; margin: .45rem 0 .35rem; }
-.invalid .outcome { text-decoration: line-through; text-decoration-color: rgba(248,113,113,.7); color: #8B93A7; }
-.assume { font-size: .84rem; color: #B9C1D3; margin: .15rem 0; }
-.assume::before { content: "◇ "; color: #7C9CFF; }
-.invalid-box { margin-top: .5rem; background: rgba(248,113,113,.09); border-left: 3px solid #F87171; border-radius: 8px; padding: .45rem .7rem; font-size: .84rem; color: #FECACA; }
+/* Limits */
+.lim-head { font-size: .8rem; font-weight: 600; color: var(--ink); margin: 0 0 .4rem; }
+.lim-item {
+  font-size: .82rem;
+  line-height: 1.45;
+  color: var(--ink);
+  padding: .5rem .65rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-bottom: .4rem;
+}
+.owner { display: block; margin-top: .28rem; font-size: .76rem; color: var(--accent); font-weight: 500; }
+.stopbar {
+  margin-top: .55rem;
+  font-size: .81rem;
+  color: var(--ink-muted);
+  padding: .48rem .75rem;
+  border-radius: 4px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
 
-.limit-col h4 { font-size: .86rem !important; margin: 0 0 .5rem !important; padding: 0 !important; color: #DCE3FF; }
-.limit { font-size: .85rem; color: #D2D8E5; padding: .5rem .65rem; border-radius: 9px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); margin-bottom: .45rem; }
-.owner { display:block; margin-top: .3rem; font-size: .77rem; color: #7DD3FC; }
-.stopbar { margin-top: .5rem; font-size: .84rem; color: #B9C1D3; padding: .55rem .8rem; border-radius: 10px; background: rgba(124,156,255,.07); border: 1px dashed rgba(124,156,255,.35); }
+/* Evidence */
+.rec-head { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; }
+.rec-title { font-weight: 600; color: var(--ink); font-size: .95rem; }
+.rec-type { font-size: .75rem; color: var(--ink-faint); }
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: .4rem .85rem;
+  margin: .6rem 0 .4rem;
+  padding-top: .5rem;
+  border-top: 1px solid var(--border);
+}
+.meta-grid div { font-size: .81rem; color: var(--ink); }
+.meta-grid span {
+  display: block;
+  font-size: .66rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: .06rem;
+}
+.defn {
+  font-size: .81rem;
+  margin: .22rem 0;
+  padding: .35rem .55rem;
+  border-radius: 4px;
+  background: var(--inf-bg);
+  border: 1px solid var(--inf-bd);
+  color: var(--ink);
+}
+.ctx { font-size: .81rem; margin: .35rem 0; color: var(--warn); }
+.content { white-space: pre-wrap; font-size: .88rem; line-height: 1.62; color: var(--ink); }
 
-.rec-head { display:flex; align-items:center; gap:.5rem; flex-wrap: wrap; }
-.rec-title { font-weight: 650; color: #EEF1F8; font-size: 1rem; }
-.meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .45rem .9rem; margin: .7rem 0 .4rem; }
-.meta-grid div { font-size: .82rem; color: #D2D8E5; }
-.meta-grid span { display:block; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: #7D869A; margin-bottom: .1rem; }
-.defn { font-size: .83rem; margin: .25rem 0; padding: .4rem .6rem; border-radius: 8px; background: rgba(192,132,252,.07); border: 1px solid rgba(192,132,252,.2); color: #E4D7FA; }
-.ctx { font-size: .83rem; margin: .4rem 0; color: #FCD9A0; }
-.content { white-space: pre-wrap; font-size: .9rem; line-height: 1.6; color: #D9DEEA; }
+/* Timeline */
+.tstep {
+  display: grid;
+  grid-template-columns: 1.7rem 1fr;
+  gap: .55rem;
+  padding: .48rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.tnum {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .72rem;
+  font-weight: 500;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  border: 1px solid var(--border);
+}
+.thought { font-size: .81rem; color: var(--ink-muted); font-style: italic; }
+.call { font-family: 'IBM Plex Mono', monospace; font-size: .78rem; color: var(--ink); margin: .12rem 0; }
+.obs { font-size: .79rem; color: var(--ink-muted); }
+.st-pill {
+  font-size: .64rem;
+  font-weight: 600;
+  padding: .06rem .35rem;
+  border-radius: 3px;
+  margin-left: .35rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.s-ok { background: var(--ok-bg); color: var(--ok); }
+.s-warn { background: var(--warn-bg); color: var(--warn); }
+.s-err { background: var(--err-bg); color: var(--err); }
 
-.tstep { display:grid; grid-template-columns: 2rem 1fr; gap: .6rem; padding: .55rem 0; border-bottom: 1px solid rgba(255,255,255,.05); }
-.tnum { width: 1.7rem; height: 1.7rem; border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size: .75rem; font-weight: 650; background: rgba(124,156,255,.15); color: #C7D2FF; }
-.thought { font-size: .84rem; color: #AEB6C8; font-style: italic; }
-.call { font-family: 'JetBrains Mono', monospace; font-size: .8rem; color: #E6E9F2; margin: .15rem 0; }
-.obs { font-size: .8rem; color: #9AA3B5; }
-.st-pill { font-size: .66rem; font-weight: 650; padding: .08rem .42rem; border-radius: 5px; margin-left: .35rem; text-transform: uppercase; letter-spacing: .04em; }
-.s-ok { background: rgba(52,211,153,.14); color: #6EE7B7; } .s-warn { background: rgba(251,191,36,.14); color: #FCD34D; } .s-err { background: rgba(248,113,113,.14); color: #FCA5A5; }
-
-div[data-testid="stSegmentedControl"] button { font-weight: 600; }
+/* Quiet Streamlit controls */
+div[data-testid="stSegmentedControl"] button { font-weight: 500; font-size: .86rem; }
+div[data-testid="stPills"] button {
+  font-family: 'IBM Plex Mono', monospace !important;
+  font-size: .75rem !important;
+  min-height: 1.65rem !important;
+  padding: .1rem .5rem !important;
+}
 </style>
 """
 
@@ -201,7 +415,7 @@ def log(event: str, snapshot: bool = False, **payload) -> None:
 
 def fmt_ts(iso: str) -> str:
     try:
-        return datetime.fromisoformat(iso).strftime("%a %d %b %H:%M")
+        return datetime.fromisoformat(iso).strftime("%d %b %H:%M")
     except ValueError:
         return iso
 
@@ -213,12 +427,12 @@ def age(iso: str, phase: str) -> str:
         return ""
     hours = delta.total_seconds() / 3600
     if hours < 0:
-        return "after current time"
+        return "after now"
     if hours < 1:
-        return f"{int(delta.total_seconds() // 60)} min before now"
+        return f"{int(delta.total_seconds() // 60)} min ago"
     if hours < 48:
-        return f"{hours:.0f} h before now"
-    return f"{int(hours // 24)} days old"
+        return f"{hours:.0f} h ago"
+    return f"{int(hours // 24)} d ago"
 
 
 def init_state() -> None:
@@ -243,7 +457,7 @@ def init_state() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Callbacks (only mutate state; heavy work happens in process_op)
+# Callbacks
 # ---------------------------------------------------------------------------
 
 
@@ -283,38 +497,38 @@ def _add_action(action: UserAction) -> None:
 def cb_correction() -> None:
     note = (ss.get("corr_note") or "").strip()
     if not note:
-        ss.toast = ("Write the correction first.", "⚠️")
+        ss.toast = "Enter a correction first."
         return
     target = ss.get("corr_target") or ""
-    target = "" if target.startswith("(") else target.split(" ")[0]
+    target = "" if target == "General" else target.split(" ")[0]
     _add_action(UserAction(action_type="correct", note=note, target=target, scenario_time=ss.record.phase))
-    ss.op = ("start", "user_correction", f"Correction{' to ' + target if target else ''}: {note}")
+    ss.op = ("start", "user_correction", f"Correction{f' ({target})' if target else ''}: {note}")
 
 
 def cb_redirect() -> None:
     note = (ss.get("redir_note") or "").strip()
     target = ss.get("redir_doc") or ""
-    target = "" if target.startswith("(") else target.split(" ")[0]
+    target = "" if target == "Any" else target.split(" ")[0]
     if not note and not target:
-        ss.toast = ("Say where the investigation should focus.", "⚠️")
+        ss.toast = "Specify a focus or record."
         return
-    note = note or f"Look again at {target}"
+    note = note or f"Review {target}"
     _add_action(UserAction(action_type="redirect", note=note, target=target, scenario_time=ss.record.phase))
     ss.op = ("start", "user_redirect", f"Redirect: {note}")
 
 
 def cb_reinvestigate() -> None:
-    ss.op = ("start", "reinvestigate", "Practitioner requested a re-investigation.")
+    ss.op = ("start", "reinvestigate", "Manual re-investigation.")
 
 
 def cb_investigate_new() -> None:
     log("investigate_new_records_clicked")
-    ss.op = ("start", "new_records", "Records D07–D08 became available at 09:35.")
+    ss.op = ("start", "new_records", "Records D07–D08 released at 09:35.")
 
 
 def cb_step_mode() -> None:
     kind = "pause" if ss.step_mode else "resume"
-    _add_action(UserAction(action_type=kind, note="Step-by-step mode " + ("on" if ss.step_mode else "off"), scenario_time=ss.record.phase))
+    _add_action(UserAction(action_type=kind, note="Step-by-step " + ("on" if ss.step_mode else "off"), scenario_time=ss.record.phase))
 
 
 def cb_run_op(kind: str) -> None:
@@ -334,7 +548,7 @@ def cb_release() -> None:
     ss.record.phase = "09:35"
     ss.released_at = datetime.now().strftime("%H:%M:%S")
     log("release_0935", released=["D07", "D08"])
-    ss.toast = ("New records available (09:35)", "🕤")
+    ss.toast = "09:35 records available (D07, D08)."
 
 
 def cb_reset() -> None:
@@ -353,7 +567,7 @@ def cb_new_session() -> None:
     ss.logger = EventLogger(pid)
     cb_reset()
     log("session_start", snapshot=True, agent_mode=ss.agent_mode)
-    ss.toast = (f"New session for participant {pid}", "🧪")
+    ss.toast = f"Session started: {pid}"
 
 
 def cb_retry_mock() -> None:
@@ -372,7 +586,7 @@ def _log_step(s: ToolCallLog) -> None:
 
 
 def _finalize(run: AgentRun) -> None:
-    with st.spinner("Writing the revised account…"):
+    with st.spinner("Updating account…"):
         try:
             new = run.finalize()
         except Exception as exc:
@@ -388,7 +602,7 @@ def _finalize(run: AgentRun) -> None:
         log("view_change", view="Situation", from_view=ss.view, via="auto_after_revision")
     ss.view = ss.last_view = "Situation"
     ss.focus_doc = None
-    ss.toast = (f"Account revised to v{new.version}", "✨")
+    ss.toast = f"Updated to v{new.version}."
 
 
 def process_op() -> None:
@@ -415,16 +629,16 @@ def process_op() -> None:
     if run is None:
         return
     if kind == "step":
-        with st.spinner("Agent is taking one step…"):
+        with st.spinner("Running step…"):
             for s in run.step():
                 _log_step(s)
     elif kind == "run_to_end":
-        with st.status(f"Investigating ({MODE_LABEL[run.mode]})…", expanded=True) as status:
+        with st.status(f"Investigating ({MODE_LABEL[run.mode]})…", expanded=False) as status:
             def on_step(s: ToolCallLog) -> None:
                 _log_step(s)
-                status.write(f"**{s.step}.** `{s.tool}` {fmt_args(s)} → {s.status}  \n_{s.thought}_")
+                status.write(f"`{s.step}.` `{s.tool}({fmt_args(s)})` — {s.status}")
             run.run_to_end(on_step=on_step)
-            status.update(label="Investigation finished, writing the account…", state="complete")
+            status.update(label="Investigation complete", state="complete")
     elif kind == "stop":
         run.stop()
         log("agent_run_stopped_by_user", tool_calls=run.tool_calls)
@@ -445,29 +659,24 @@ def fmt_args(s: ToolCallLog) -> str:
 
 def render_header(rec: InquiryRecord) -> None:
     n_avail = sum(1 for r in load_records().values() if is_released(r, rec.phase))
-    last = rec.latest_revision
     st.markdown(
         f"""
-<div class="hero">
-  <div class="eyebrow">Stay in the Know · Inquiry workspace · Project Aurora</div>
-  <h1>{E(rec.question)}</h1>
-  <div class="chips">
-    <span class="chip clock">🕘 Scenario time {rec.phase}</span>
-    <span class="chip">Account v{rec.version}</span>
-    <span class="chip rel-{rec.reliance}">D01 for external review: {RELIANCE_LABEL[rec.reliance]}</span>
-    <span class="chip">Records available {n_avail}/{len(load_records())}</span>
-    <span class="chip">Last revision by {MODE_LABEL.get(last.agent_mode, last.agent_mode) if last else '–'}</span>
+<div class="mast">
+  <div class="mast-top">
+    <div class="mast-meta">Project Aurora &middot; <span class="mono"><b>{rec.phase}</b></span> &middot; <span class="mono">v{rec.version}</span> &middot; {n_avail}/{len(load_records())} records</div>
+    <span class="rel rel-{rec.reliance}">D01: {RELIANCE_LABEL[rec.reliance]}</span>
   </div>
+  <h1>{E(rec.question)}</h1>
 </div>""",
         unsafe_allow_html=True,
     )
     if rec.phase == "09:35" and "D07" not in rec.retrievals and ss.active_run is None:
-        c1, c2 = st.columns([3.2, 1.5], vertical_alignment="center")
+        c1, c2 = st.columns([3.8, 1.2], vertical_alignment="center")
         c1.markdown(
-            '<div class="newrec">🕤 <b>2 new records available (09:35).</b> The current account has not considered them yet.</div>',
+            '<div class="notice"><b>09:35</b> — Two new records available (D07, D08), not yet incorporated.</div>',
             unsafe_allow_html=True,
         )
-        c2.button("Investigate new records", key="btn_investigate_new", type="primary", on_click=cb_investigate_new, use_container_width=True)
+        c2.button("Investigate", key="btn_investigate_new", type="primary", on_click=cb_investigate_new, use_container_width=True)
 
 
 # ---------------------------------------------------------------------------
@@ -475,9 +684,8 @@ def render_header(rec: InquiryRecord) -> None:
 # ---------------------------------------------------------------------------
 
 
-def section(title: str, dp: str = "") -> None:
-    dp_html = f'<span class="dp">{dp}</span>' if dp else ""
-    st.markdown(f'<div class="section-title">{E(title)} {dp_html}</div>', unsafe_allow_html=True)
+def section(title: str) -> None:
+    st.markdown(f'<div class="sec-h">{E(title)}</div>', unsafe_allow_html=True)
 
 
 def render_changed(rec: InquiryRecord) -> None:
@@ -485,23 +693,24 @@ def render_changed(rec: InquiryRecord) -> None:
     if not rev or rev.version <= 1:
         return
     bullets = "".join(f"<li>{E(b)}</li>" for b in rev.what_changed)
+    trig = TRIGGER_LABEL.get(rev.trigger, rev.trigger)
     st.markdown(
-        f"""<div class="changed"><h3>What changed in v{rev.version}</h3>
-<div class="meta-line">Trigger: <b>{E(TRIGGER_LABEL.get(rev.trigger, rev.trigger))}</b> · {E(rev.trigger_note)} · by {MODE_LABEL.get(rev.agent_mode, rev.agent_mode)} at scenario time {rev.scenario_time[-8:-3]}</div>
+        f"""<div class="changed">
+<div class="changed-head">Changes in v{rev.version} &middot; {E(trig)} ({rev.scenario_time[-8:-3]})</div>
 <ul>{bullets}</ul></div>""",
         unsafe_allow_html=True,
     )
     if rev.changed_claims:
-        with st.expander(f"Claim-level changes ({len(rev.changed_claims)}) compared with v{rev.version - 1}"):
+        with st.expander(f"Claim diff vs. v{rev.version - 1} ({len(rev.changed_claims)})"):
             rows = []
             for ch in rev.changed_claims:
                 if ch.change == "added":
-                    rows.append(f'<div class="qual"><span class="badge b-new">added</span><b>{ch.claim_id}</b> <span class="diff-added">{E(ch.after)}</span></div>')
+                    rows.append(f'<div class="qual"><span class="b b-new">added</span><span class="mono">{ch.claim_id}</span> <span class="diff-added">{E(ch.after)}</span></div>')
                 elif ch.change == "withdrawn":
-                    rows.append(f'<div class="qual"><span class="badge b-invalid">withdrawn</span><b>{ch.claim_id}</b> <span class="diff-withdrawn">{E(ch.before)}</span></div>')
+                    rows.append(f'<div class="qual"><span class="b b-invalid">withdrawn</span><span class="mono">{ch.claim_id}</span> <span class="diff-withdrawn">{E(ch.before)}</span></div>')
                 else:
-                    before = f'<div class="diff-before">{E(ch.before)}</div>' if ch.before != ch.after else '<div class="meta-line">(wording unchanged; basis or qualifications changed)</div>'
-                    rows.append(f'<div class="qual"><span class="badge b-rev">revised</span><b>{ch.claim_id}</b>{before}<div>{E(ch.after)}</div></div>')
+                    before = f'<div class="diff-before">{E(ch.before)}</div>' if ch.before != ch.after else '<div class="meta">(basis or qualification updated)</div>'
+                    rows.append(f'<div class="qual"><span class="b b-rev">revised</span><span class="mono">{ch.claim_id}</span>{before}<div>{E(ch.after)}</div></div>')
             st.markdown("".join(rows), unsafe_allow_html=True)
 
 
@@ -513,42 +722,46 @@ def render_claim(c: Claim, rec: InquiryRecord) -> None:
     label, cls = CLAIM_BADGE[c.claim_type]
     tag = ""
     if change == "added":
-        tag = f'<span class="badge b-new">new in v{rev.version}</span>'
+        tag = f'<span class="b b-new">v{rev.version}</span>'
     elif change == "revised":
-        tag = f'<span class="badge b-rev">revised in v{rev.version}</span>'
+        tag = f'<span class="b b-rev">revised</span>'
     conflicts = "".join(
-        f'<div class="conflict">⚖️ <b>Conflict {E(" vs ".join(cf.doc_ids))}:</b> {E(cf.note)}</div>' for cf in c.conflicts
+        f'<div class="conflict"><b>Conflict ({E(" / ".join(cf.doc_ids))}):</b> {E(cf.note)}</div>' for cf in c.conflicts
     )
     quals = "".join(f'<div class="qual">{E(q)}</div>' for q in c.qualifications)
     with st.container(key=f"card-claim-{c.id}-v{rec.version}"):
         st.markdown(
-            f'<span class="badge b-id">{c.id}</span><span class="badge {cls}">{label}</span>{tag}'
+            f'<span class="b b-id">{c.id}</span><span class="b {cls}">{label}</span>{tag}'
             f'<div class="claim-text">{E(c.text)}</div>{conflicts}{quals}',
             unsafe_allow_html=True,
         )
         if c.citations:
             key = f"cite-{c.id}-v{rec.version}"
             st.pills("Sources", c.citations, key=key, on_change=cb_citation, args=(key, c.id),
-                     label_visibility="collapsed", format_func=lambda d: f"📄 {d}")
+                     label_visibility="collapsed")
         else:
-            st.markdown('<div class="meta-line" style="margin-bottom:.4rem">No record cited</div>', unsafe_allow_html=True)
+            st.markdown('<div class="meta" style="margin-bottom:.3rem">No record cited</div>', unsafe_allow_html=True)
 
 
 def render_projection(p: Projection, rec: InquiryRecord) -> None:
-    status_badge = {"active": ("Active", "b-active"), "invalidated": ("Invalidated", "b-invalid"), "retired": ("Retired", "b-retired")}[p.status]
+    status_badge = {
+        "active": ("Active", "b-active"),
+        "invalidated": ("Invalidated", "b-invalid"),
+        "retired": ("Retired", "b-retired"),
+    }[p.status]
     assumptions = "".join(f'<div class="assume">{E(a)}</div>' for a in p.assumptions)
     inval = ""
     if p.status != "active":
-        by = f" by {E(', '.join(p.invalidated_by))}" if p.invalidated_by else ""
-        inval = f'<div class="invalid-box"><b>{status_badge[0]}{by}.</b> {E(p.invalidation_reason)}</div>'
-    since = f'<span class="meta-line"> · since v{p.since_version}</span>' if p.since_version else ""
-    based = f'<div class="meta-line" style="margin-top:.45rem">Based on {E(", ".join(p.based_on))}</div>' if p.based_on else ""
+        by = f" ({E(', '.join(p.invalidated_by))})" if p.invalidated_by else ""
+        inval = f'<div class="inval-note"><b>{status_badge[0]}{by}:</b> {E(p.invalidation_reason)}</div>'
+    since = f'<span class="meta"> · v{p.since_version}</span>' if p.since_version else ""
+    based = f'<div class="meta" style="margin-top:.4rem">Basis: <span class="mono">{E(", ".join(p.based_on))}</span></div>' if p.based_on else ""
     with st.container(key=f"card-proj-{p.id}-v{rec.version}"):
         st.markdown(
             f'<div class="{"invalid" if p.status != "active" else ""}">'
-            f'<span class="badge b-id">{p.id}</span><span class="badge {status_badge[1]}">{status_badge[0]}</span>{since}'
+            f'<span class="b b-id">{p.id}</span><span class="b {status_badge[1]}">{status_badge[0]}</span>{since}'
             f'<div class="outcome">{E(p.outcome)}</div>'
-            f'<div class="meta-line" style="margin:.2rem 0">Holds only if:</div>{assumptions}{inval}{based}</div>',
+            f'<div class="meta" style="margin:.15rem 0">Assumes</div>{assumptions}{inval}{based}</div>',
             unsafe_allow_html=True,
         )
 
@@ -558,35 +771,28 @@ def render_situation(rec: InquiryRecord) -> None:
 
     with st.container(key=f"card-summary-v{rec.version}"):
         st.markdown(
-            f'<span class="badge rel-{rec.reliance}" style="border:1px solid">{RELIANCE_LABEL[rec.reliance]}</span>'
-            f'<div class="summary" style="margin-top:.5rem">{E(rec.situation_summary)}</div>'
+            f'<div class="summary">{E(rec.situation_summary)}</div>'
             f'<div class="assess"><b>Assessment:</b> {E(rec.overall_assessment)}</div>',
             unsafe_allow_html=True,
         )
 
-    section("Claims and their basis", "DP2")
-    st.markdown(
-        '<div class="legend"><span class="badge b-direct">Direct record</span> stated in a record · '
-        '<span class="badge b-inference">Agent inference</span> reasoned by the agent · '
-        '<span class="badge b-user">Practitioner input</span> from your corrections · click 📄 to open the source</div>',
-        unsafe_allow_html=True,
-    )
+    section("Claims")
     for c in rec.claims:
         render_claim(c, rec)
 
     rev = rec.latest_revision
     if rev and rev.competing_hypotheses:
-        with st.expander(f"Competing explanations ({len(rev.competing_hypotheses)})", icon="🔀"):
+        with st.expander(f"Competing explanations ({len(rev.competing_hypotheses)})"):
             for h in rev.competing_hypotheses:
                 st.markdown(
-                    f'<div class="limit"><span class="badge b-id">{h.id}</span>{E(h.explanation)}'
-                    f'<div class="qual">Supports: {E(", ".join(h.supporting) or "–")}</div>'
+                    f'<div class="lim-item"><span class="b b-id">{h.id}</span>{E(h.explanation)}'
+                    f'<div class="qual">For: {E(", ".join(h.supporting) or "–")}</div>'
                     f'<div class="qual">Against: {E(", ".join(h.against) or "–")}</div>'
-                    f'<div class="qual"><b>Would resolve:</b> {E(h.what_would_resolve)}</div></div>',
+                    f'<div class="qual"><b>Resolves via:</b> {E(h.what_would_resolve)}</div></div>',
                     unsafe_allow_html=True,
                 )
 
-    section("Projections and their conditions", "DP4")
+    section("Projections")
     active = [p for p in rec.projections if p.status == "active"]
     inactive = [p for p in rec.projections if p.status != "active"]
     cols = st.columns(2)
@@ -594,25 +800,25 @@ def render_situation(rec: InquiryRecord) -> None:
         with cols[i % 2]:
             render_projection(p, rec)
 
-    section("Limits and unresolved points", "DP5")
+    section("Limits & open questions")
     groups = [
-        ("search_gap", "🔍 Search limits", "Searched, but nothing was found"),
-        ("conflict", "⚖️ Unresolved conflicts", "Records disagree"),
-        ("tacit_knowledge", "👤 Needs a person", "Cannot be settled from records alone"),
+        ("search_gap", "Search gaps"),
+        ("conflict", "Unresolved conflicts"),
+        ("tacit_knowledge", "Requires a person"),
     ]
     cols = st.columns(3)
-    for col, (typ, title, sub) in zip(cols, groups):
+    for col, (typ, title) in zip(cols, groups):
         items = [l for l in rec.limitations if l.type == typ]
         body = "".join(
-            f'<div class="limit">{E(l.description)}'
-            + (f'<span class="owner">→ {E(l.unresolved_owner)}</span>' if l.unresolved_owner else "")
-            + (f'<div class="meta-line">{E(", ".join(l.related_docs))}</div>' if l.related_docs else "")
+            f'<div class="lim-item">{E(l.description)}'
+            + (f'<span class="owner">{E(l.unresolved_owner)}</span>' if l.unresolved_owner else "")
+            + (f'<div class="meta mono" style="margin-top:.2rem">{E(", ".join(l.related_docs))}</div>' if l.related_docs else "")
             + "</div>"
             for l in items
-        ) or '<div class="meta-line">None recorded.</div>'
-        col.markdown(f'<div class="limit-col"><h4>{title}</h4><div class="meta-line" style="margin:-.3rem 0 .5rem">{sub}</div>{body}</div>', unsafe_allow_html=True)
+        ) or '<div class="meta">None.</div>'
+        col.markdown(f'<div class="lim-head">{title}</div>{body}', unsafe_allow_html=True)
     if rev:
-        st.markdown(f'<div class="stopbar">⏹ <b>Why the agent stopped:</b> {E(rev.stopping_reason)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stopbar"><b>Stopped:</b> {E(rev.stopping_reason)}</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -623,38 +829,41 @@ def render_situation(rec: InquiryRecord) -> None:
 def render_evidence(rec: InquiryRecord) -> None:
     records = load_records()
     if ss.focus_doc:
-        c1, c2 = st.columns([4, 1], vertical_alignment="center")
-        c1.markdown(f'<div class="meta-line">Opened from a citation: <b>{E(ss.focus_doc)}</b></div>', unsafe_allow_html=True)
-        c2.button("← Back to Situation", key="btn_back", on_click=cb_back_to_situation, use_container_width=True)
+        c1, c2 = st.columns([4, 1.1], vertical_alignment="center")
+        c1.markdown(f'<div class="meta">Viewing cited record <span class="mono"><b>{E(ss.focus_doc)}</b></span></div>', unsafe_allow_html=True)
+        c2.button("← Situation", key="btn_back", on_click=cb_back_to_situation, use_container_width=True)
 
-    section("Records and their context", "DP1")
+    section("Records")
     order = sorted(records, key=lambda d: (d != ss.focus_doc, d))
     for doc_id in order:
         r = records[doc_id]
         if not is_released(r, rec.phase):
             with st.container(key=f"card-locked-{doc_id}"):
-                st.markdown(f'<div class="rec-head"><span class="badge b-id">{doc_id}</span><span class="rec-title">🔒 Not yet available</span>'
-                            f'<span class="chip">available from {r.release_phase}</span></div><div style="height:.5rem"></div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="rec-head"><span class="b b-id">{doc_id}</span>'
+                    f'<span class="rec-type">Not available until {r.release_phase}</span></div>',
+                    unsafe_allow_html=True,
+                )
             continue
         focus = doc_id == ss.focus_doc
         retrieved = rec.retrievals.get(doc_id)
         cited_by = [c.id for c in rec.claims if doc_id in c.citations]
         defs = "".join(f'<div class="defn"><b>{E(d.term)}:</b> {E(d.meaning)}</div>' for d in r.definitions)
-        ctx = f'<div class="ctx">⚠️ {E(r.context_note)}</div>' if r.context_note else ""
+        ctx = f'<div class="ctx">{E(r.context_note)}</div>' if r.context_note else ""
         with st.container(key=f"card-{'focus' if focus else 'rec'}-{doc_id}-v{rec.version}"):
             st.markdown(
-                f"""<div class="rec-head"><span class="badge b-id">{doc_id}</span><span class="rec-title">{E(r.title)}</span><span class="chip">{E(r.source_type)}</span></div>
+                f"""<div class="rec-head"><span class="b b-id">{doc_id}</span><span class="rec-title">{E(r.title)}</span><span class="rec-type">{E(r.source_type)}</span></div>
 <div class="meta-grid">
-  <div><span>Source system</span>{E(r.source_system)}</div>
-  <div><span>Author / role</span>{E(r.author_role)}</div>
-  <div><span>Record last updated</span>{fmt_ts(r.updated_at)} · {age(r.updated_at, rec.phase)}</div>
-  <div><span>Retrieved by agent</span>{('at scenario time ' + retrieved[-8:-3]) if retrieved else 'Not yet read'}</div>
-  <div><span>Depends on</span>{E(', '.join(r.dependencies) or '–')}</div>
-  <div><span>Cited by claims</span>{E(', '.join(cited_by) or '–')}</div>
-</div>{ctx}{('<div class="meta-line" style="margin-top:.4rem">Team-specific definitions</div>' + defs) if defs else ''}""",
+  <div><span>Source</span>{E(r.source_system)}</div>
+  <div><span>Author</span>{E(r.author_role)}</div>
+  <div><span>Updated</span>{fmt_ts(r.updated_at)} ({age(r.updated_at, rec.phase)})</div>
+  <div><span>Retrieved</span>{(retrieved[-8:-3]) if retrieved else 'Not read'}</div>
+  <div><span>Depends on</span><span class="mono">{E(', '.join(r.dependencies) or '–')}</span></div>
+  <div><span>Cited in</span><span class="mono">{E(', '.join(cited_by) or '–')}</span></div>
+</div>{ctx}{('<div class="meta" style="margin-top:.35rem">Definitions</div>' + defs) if defs else ''}""",
                 unsafe_allow_html=True,
             )
-            with st.expander("Full record", expanded=focus):
+            with st.expander("Full text", expanded=focus):
                 st.markdown(f'<div class="content">{E(r.content)}</div>', unsafe_allow_html=True)
 
 
@@ -667,45 +876,45 @@ def timeline_html(steps: List[ToolCallLog]) -> str:
     out = []
     for s in steps:
         if s.tool == "conclude":
-            call = '<div class="call">■ conclude</div>'
+            call = '<div class="call">conclude</div>'
         else:
             call = f'<div class="call">{E(s.tool)}({E(fmt_args(s))})<span class="st-pill {STATUS_CLASS.get(s.status, "s-warn")}">{E(s.status)}</span></div>'
         thought = f'<div class="thought">{E(s.thought)}</div>' if s.thought else ""
-        obs = f'<div class="obs">→ {E(s.observation_summary)}</div>' if s.observation_summary else ""
+        obs = f'<div class="obs">{E(s.observation_summary)}</div>' if s.observation_summary else ""
         out.append(f'<div class="tstep"><div class="tnum">{s.step}</div><div>{thought}{call}{obs}</div></div>')
-    return "".join(out) or '<div class="meta-line">No steps yet.</div>'
+    return "".join(out) or '<div class="meta">No steps yet.</div>'
 
 
 def render_investigation(rec: InquiryRecord) -> None:
     run: Optional[AgentRun] = ss.active_run
     if run is not None:
-        section("Investigation in progress", "DP6")
+        section("Active run")
         st.markdown(timeline_html(run.steps), unsafe_allow_html=True)
 
-    section("Investigation trace by version", "DP3 · DP5")
+    section("Trace by version")
     for rev in reversed(rec.revisions):
         steps = [s for s in rec.tool_log if s.version == rev.version]
-        call_word = "tool call" if rev.tool_calls == 1 else "tool calls"
+        call_word = "call" if rev.tool_calls == 1 else "calls"
         title = f"v{rev.version} · {TRIGGER_LABEL.get(rev.trigger, rev.trigger)} · {rev.tool_calls} {call_word} · {MODE_LABEL.get(rev.agent_mode, rev.agent_mode)}"
         with st.expander(title, expanded=rev.version == rec.version):
             st.markdown(
-                f'<div class="meta-line">{E(rev.trigger_note)}</div>{timeline_html(steps)}'
-                f'<div class="stopbar">⏹ {E(rev.stopping_reason)}</div>',
+                f'<div class="meta">{E(rev.trigger_note)}</div>{timeline_html(steps)}'
+                f'<div class="stopbar">{E(rev.stopping_reason)}</div>',
                 unsafe_allow_html=True,
             )
 
-    section("Your direction history", "DP6")
-    acts = [a for a in rec.user_actions]
+    section("Direction history")
+    acts = list(rec.user_actions)
     if acts:
         st.dataframe(
             [
                 {
                     "Time": a.timestamp[-8:],
-                    "Scenario": a.scenario_time,
-                    "Action": a.action_type,
+                    "Phase": a.scenario_time,
+                    "Type": a.action_type,
                     "Target": a.target or "–",
                     "Note": a.note,
-                    "Applied in": f"v{a.applied_in_version}" if a.applied_in_version else ("–" if a.action_type in ("pause", "resume") else "pending"),
+                    "Applied": f"v{a.applied_in_version}" if a.applied_in_version else ("–" if a.action_type in ("pause", "resume") else "pending"),
                 }
                 for a in acts
             ],
@@ -713,75 +922,75 @@ def render_investigation(rec: InquiryRecord) -> None:
             use_container_width=True,
         )
     else:
-        st.markdown('<div class="meta-line">No corrections or redirects yet.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="meta">No corrections or redirects recorded.</div>', unsafe_allow_html=True)
 
     if rec.history:
-        section("Earlier versions of the account", "DP3")
+        section("Earlier versions")
         versions = [h["version"] for h in rec.history]
-        v = st.selectbox("Show version", versions, index=len(versions) - 1, format_func=lambda x: f"v{x}", key="hist_v")
+        v = st.selectbox("Version", versions, index=len(versions) - 1, format_func=lambda x: f"v{x}", key="hist_v")
         snap = InquiryRecord.model_validate(next(h for h in rec.history if h["version"] == v))
         if ss.get("_last_hist_v") != v:
             ss["_last_hist_v"] = v
             log("view_earlier_version", shown_version=v)
         st.markdown(
-            f'<div class="limit"><span class="badge rel-{snap.reliance}" style="border:1px solid">{RELIANCE_LABEL[snap.reliance]}</span>'
-            f'<div class="summary" style="font-size:.92rem;margin-top:.4rem">{E(snap.situation_summary)}</div></div>'
-            + "".join(f'<div class="qual"><b>{c.id}</b> {E(c.text)}</div>' for c in snap.claims)
-            + "".join(f'<div class="qual"><b>{p.id}</b> [{p.status}] {E(p.outcome)}</div>' for p in snap.projections),
+            f'<div class="lim-item"><span class="rel rel-{snap.reliance}">{RELIANCE_LABEL[snap.reliance]}</span>'
+            f'<div class="summary" style="font-size:.88rem;margin-top:.4rem">{E(snap.situation_summary)}</div></div>'
+            + "".join(f'<div class="qual"><span class="mono"><b>{c.id}</b></span> {E(c.text)}</div>' for c in snap.claims)
+            + "".join(f'<div class="qual"><span class="mono"><b>{p.id}</b></span> [{p.status}] {E(p.outcome)}</div>' for p in snap.projections),
             unsafe_allow_html=True,
         )
 
 
 # ---------------------------------------------------------------------------
-# Rendering: direction panel (DP6)
+# Rendering: direction panel
 # ---------------------------------------------------------------------------
 
 
 def render_direction_panel(rec: InquiryRecord) -> None:
     run: Optional[AgentRun] = ss.active_run
     with st.container(key="panel-direct"):
-        st.markdown('<div class="section-title" style="margin-top:0">Direct the inquiry <span class="dp">DP6</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-h" style="margin-top:0">Direction</div>', unsafe_allow_html=True)
 
         if ss.agent_error:
-            st.error(f"The agent could not complete the revision. The account is unchanged.\n\n{ss.agent_error}")
-            st.button("Use scripted agent instead", key="btn_retry_mock", on_click=cb_retry_mock, use_container_width=True)
+            st.error(f"Revision failed; account unchanged.\n\n{ss.agent_error}")
+            st.button("Switch to scripted mode", key="btn_retry_mock", on_click=cb_retry_mock, use_container_width=True)
 
         if run is not None:
-            st.markdown(f'<div class="meta-line">Step-by-step investigation · {run.tool_calls}/{run.max_steps} tool calls · {MODE_LABEL[run.mode]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="meta">Step-by-step · {run.tool_calls}/{run.max_steps} calls · {MODE_LABEL[run.mode]}</div>', unsafe_allow_html=True)
             st.markdown(timeline_html(run.steps[-3:]), unsafe_allow_html=True)
             c1, c2 = st.columns(2)
-            c1.button("Next step ▶", key="btn_step", on_click=cb_run_op, args=("step",), type="primary", use_container_width=True)
-            c2.button("Run to end ⏩", key="btn_run_end", on_click=cb_run_op, args=("run_to_end",), use_container_width=True)
-            st.button("Stop and write account ⏹", key="btn_stop", on_click=cb_run_op, args=("stop",), use_container_width=True)
-            st.text_input("Add direction for the next step", key="mid_dir", placeholder="e.g. check who owns the certificate", on_change=cb_mid_direction)
+            c1.button("Next step", key="btn_step", on_click=cb_run_op, args=("step",), type="primary", use_container_width=True)
+            c2.button("Finish run", key="btn_run_end", on_click=cb_run_op, args=("run_to_end",), use_container_width=True)
+            st.button("Stop & update", key="btn_stop", on_click=cb_run_op, args=("stop",), use_container_width=True)
+            st.text_input("Mid-run note", key="mid_dir", placeholder="e.g. check certificate owner", on_change=cb_mid_direction)
             return
 
-        t_corr, t_redir = st.tabs(["✎ Correct", "➜ Redirect"])
+        t_corr, t_redir = st.tabs(["Correct", "Redirect"])
         with t_corr:
             with st.form("form_correct", clear_on_submit=True, border=False):
                 st.selectbox(
-                    "What are you correcting?",
-                    ["(the account in general)"] + [f"{c.id} – {c.text[:60]}…" for c in rec.claims],
+                    "Target",
+                    ["General"] + [f"{c.id} — {c.text[:48]}…" for c in rec.claims],
                     key="corr_target",
                 )
-                st.text_area("Your correction", key="corr_note", height=90,
-                             placeholder="e.g. Security took over certificate renewals last week.")
-                st.form_submit_button("Submit correction", type="primary", on_click=cb_correction, use_container_width=True)
+                st.text_area("Correction", key="corr_note", height=84,
+                             placeholder="e.g. Security owns certificate renewals since last week.")
+                st.form_submit_button("Apply correction", type="primary", on_click=cb_correction, use_container_width=True)
         with t_redir:
             with st.form("form_redirect", clear_on_submit=True, border=False):
-                st.text_input("Focus the investigation on…", key="redir_note", placeholder="e.g. whether UAT can still start on 12 March")
-                st.selectbox("Specific record (optional)", ["(any record)"] + [d for d, r in load_records().items() if is_released(r, rec.phase)], key="redir_doc")
-                st.form_submit_button("Redirect investigation", type="primary", on_click=cb_redirect, use_container_width=True)
+                st.text_input("Focus", key="redir_note", placeholder="e.g. whether UAT can start 12 March")
+                st.selectbox("Record", ["Any"] + [d for d, r in load_records().items() if is_released(r, rec.phase)], key="redir_doc")
+                st.form_submit_button("Redirect", type="primary", on_click=cb_redirect, use_container_width=True)
 
-        st.button("↻ Re-investigate now", key="btn_reinvestigate", on_click=cb_reinvestigate, use_container_width=True)
-        st.toggle("Step-by-step (pause after each agent step)", key="step_mode", on_change=cb_step_mode)
+        st.button("Re-investigate", key="btn_reinvestigate", on_click=cb_reinvestigate, use_container_width=True)
+        st.toggle("Step-by-step", key="step_mode", on_change=cb_step_mode)
 
         recent = [a for a in rec.user_actions if a.action_type in ("correct", "redirect")][-3:]
         if recent:
-            st.markdown('<div class="meta-line" style="margin-top:.6rem">Your recent direction (kept across revisions)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="meta" style="margin:.6rem 0 .25rem">Active direction</div>', unsafe_allow_html=True)
             for a in reversed(recent):
-                applied = f"applied in v{a.applied_in_version}" if a.applied_in_version else "pending"
-                st.markdown(f'<div class="limit"><span class="badge b-user">{a.action_type}</span>{E(a.note)}<div class="meta-line">{applied}</div></div>', unsafe_allow_html=True)
+                applied = f"v{a.applied_in_version}" if a.applied_in_version else "pending"
+                st.markdown(f'<div class="lim-item"><span class="b b-user">{a.action_type}</span>{E(a.note)}<div class="meta">{applied}</div></div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -791,34 +1000,35 @@ def render_direction_panel(rec: InquiryRecord) -> None:
 
 def render_sidebar(rec: InquiryRecord) -> None:
     sb = st.sidebar
-    sb.markdown("### 🔬 Researcher control")
-    sb.caption("Not part of the practitioner interface. Keep this sidebar collapsed during interviews.")
+    sb.markdown("#### Researcher controls")
+    sb.caption("Keep collapsed during interviews.")
 
     with sb.expander("Session", expanded=True):
         st.text_input("Participant ID", value=ss.participant_id, key="pid_input")
-        st.button("Start new participant session", key="btn_new_session", on_click=cb_new_session, use_container_width=True)
-        st.caption(f"Logging to `logs/{ss.logger.path.name}`")
+        st.button("New session", key="btn_new_session", on_click=cb_new_session, use_container_width=True)
+        st.caption(f"`logs/{ss.logger.path.name}`")
 
     with sb.expander("Scenario", expanded=True):
-        st.button("Release 09:35 records (D07–D08)", key="btn_release", on_click=cb_release, disabled=rec.phase == "09:35",
+        st.button("Release 09:35 (D07–D08)", key="btn_release", on_click=cb_release, disabled=rec.phase == "09:35",
                   type="primary", use_container_width=True)
         if ss.released_at:
-            st.caption(f"Released at {ss.released_at} (wall clock)")
-        st.button("Reset to 09:15 baseline", key="btn_reset", on_click=cb_reset, use_container_width=True)
+            st.caption(f"Released {ss.released_at}")
+        st.button("Reset to 09:15", key="btn_reset", on_click=cb_reset, use_container_width=True)
 
     with sb.expander("Agent"):
         has_key = bool(get_api_key())
-        st.radio("Agent mode", ["mock", "gemini"], key="agent_mode", format_func=lambda m: MODE_LABEL[m].capitalize(),
+        st.radio("Mode", ["mock", "gemini"], key="agent_mode",
+                 format_func=lambda m: "Scripted (offline)" if m == "mock" else "Live Gemini",
                  on_change=lambda: log("agent_mode_change", mode=ss.agent_mode))
         if ss.agent_mode == "gemini" and not has_key:
-            st.warning("No GEMINI_API_KEY found (environment, .env or .streamlit/secrets.toml). Runs will fail; use the scripted agent.")
-        st.text_input("Gemini model", key="model")
-        st.slider("Max tool calls per run", 2, 12, key="max_steps")
+            st.warning("GEMINI_API_KEY not set.")
+        st.text_input("Model", key="model")
+        st.slider("Max tool calls", 2, 12, key="max_steps")
 
     with sb.expander("Export", expanded=True):
-        st.download_button("Download session log (JSON)", ss.logger.to_json(), file_name=ss.logger.path.name,
+        st.download_button("Session log (JSON)", ss.logger.to_json(), file_name=ss.logger.path.name,
                            mime="application/json", use_container_width=True, on_click="ignore")
-        st.download_button("Download current account (JSON)", rec.model_dump_json(indent=2), file_name=f"inquiry_v{rec.version}.json",
+        st.download_button("Current account (JSON)", rec.model_dump_json(indent=2), file_name=f"inquiry_v{rec.version}.json",
                            mime="application/json", use_container_width=True, on_click="ignore")
 
 
@@ -832,20 +1042,18 @@ def main() -> None:
     init_state()
     process_op()
     if ss.toast:
-        msg, icon = ss.toast
-        st.toast(msg, icon=icon)
+        st.toast(ss.toast)
         ss.toast = None
 
     rec: InquiryRecord = ss.record
     render_sidebar(rec)
     render_header(rec)
 
-    left, right = st.columns([2.5, 1.35], gap="large")
+    left, right = st.columns([2.6, 1.25], gap="large")
     with left:
         st.segmented_control(
             "View", ["Situation", "Evidence", "Investigation"], key="view", on_change=cb_view_change,
             label_visibility="collapsed",
-            format_func=lambda v: {"Situation": "🧭 Situation", "Evidence": "📄 Evidence", "Investigation": "🔎 Investigation"}[v],
         )
         view = ss.view or ss.last_view
         if view == "Situation":

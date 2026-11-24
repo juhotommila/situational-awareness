@@ -57,7 +57,8 @@ Rules:
 """
 
 FINAL_SYSTEM = """You are the investigation agent inside a sensemaking support tool. Produce the revised account of the situation as JSON
-matching the given schema. The practitioner will examine every field, so be precise and honest about uncertainty.
+matching the given schema. The practitioner will examine every field, so be precise, concise, and honest about uncertainty.
+Write in plain, understated prose without filler or repetition.
 
 Field rules:
 - claims: claim_type 'direct_record' only if a record states it; 'agent_inference' for your reasoning; 'user_provided' for content taken
