@@ -32,7 +32,7 @@ from state import (
 from tools import TOOL_DECLARATIONS, execute_tool, load_records, record_catalogue, summarise_observation
 
 DEFAULT_MAX_STEPS = int(os.environ.get("AGENT_MAX_STEPS", "8"))
-DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 ToolCall = Tuple[str, Dict[str, Any]]
 
@@ -226,23 +226,30 @@ class GeminiProvider(Provider):
         from google.genai import types
 
         self.types = types
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=45_000))
         self.model = model
         self.contents: List[Any] = []
         self.pending_text: List[str] = []
 
     # -- plumbing -----------------------------------------------------------
     def _generate(self, contents, config):
-        delays = [4, 10, 20]
-        for attempt in range(len(delays) + 1):
+        # google-genai already retries transient 429/503 errors internally via tenacity;
+        # we only fall back across models if the primary model stays unavailable.
+        models = [self.model]
+        if self.model != "gemini-3.5-flash-lite":
+            models.append("gemini-3.5-flash-lite")
+        last_exc: Optional[Exception] = None
+        for m in models:
             try:
-                return self.client.models.generate_content(model=self.model, contents=contents, config=config)
-            except Exception as exc:  # rate limits / transient errors on free tier
+                return self.client.models.generate_content(model=m, contents=contents, config=config)
+            except Exception as exc:
+                last_exc = exc
                 msg = str(exc)
                 transient = any(code in msg for code in ("429", "503", "500", "RESOURCE_EXHAUSTED", "UNAVAILABLE"))
-                if not transient or attempt == len(delays):
+                if not transient:
                     raise
-                time.sleep(delays[attempt])
+        assert last_exc is not None
+        raise last_exc
 
     def _user(self, parts):
         return self.types.Content(role="user", parts=parts)
@@ -319,9 +326,11 @@ class GeminiProvider(Provider):
         }
         prompt = "Produce the revised account as JSON.\n\n" + json.dumps(payload, indent=1, ensure_ascii=False)
         contents = [self._user([t.Part.from_text(text=prompt)])]
+        from pydantic import ValidationError
+
         schema_configs = [
-            dict(response_json_schema=AgentRevisionOutput.model_json_schema()),
             dict(response_schema=AgentRevisionOutput),
+            dict(response_json_schema=AgentRevisionOutput.model_json_schema()),
         ]
         last_err: Optional[Exception] = None
         for schema_cfg in schema_configs:
@@ -329,11 +338,15 @@ class GeminiProvider(Provider):
             for _ in range(2):
                 try:
                     resp = self._generate(contents, cfg)
-                    return AgentRevisionOutput.model_validate_json(resp.text or "")
                 except Exception as exc:
                     last_err = exc
                     if "400" in str(exc) and "schema" in str(exc).lower():
                         break  # try the next schema style
+                    raise RuntimeError(f"Model request failed: {exc}") from exc
+                try:
+                    return AgentRevisionOutput.model_validate_json(resp.text or "")
+                except ValidationError as exc:
+                    last_err = exc
                     contents = contents + [self._user([t.Part.from_text(text=f"Your previous output was invalid: {exc}. Return valid JSON only.")])]
         raise RuntimeError(f"Could not obtain a valid structured revision from the model: {last_err}")
 
@@ -436,6 +449,8 @@ class AgentRun:
         self.stopping_reason = f"Stopped by the practitioner after {self.tool_calls} tool call(s)."
 
     def finalize(self) -> InquiryRecord:
+        if self.error:
+            raise RuntimeError(self.error)
         if not self.done:
             self.stop()
         output = self.provider.final_output(self)

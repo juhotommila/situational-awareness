@@ -29,7 +29,7 @@ export GEMINI_API_KEY="your-key-here"
 *(Optional)* You can also override the model or step budget:
 
 ```bash
-export GEMINI_MODEL="gemini-2.5-flash"
+export GEMINI_MODEL="gemini-3.8-flash"
 export AGENT_MAX_STEPS="8"
 ```
 
