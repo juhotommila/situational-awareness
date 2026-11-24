@@ -1,0 +1,116 @@
+import json
+
+from agent import AgentRun, MockProvider, build_curated_baseline
+from state import AgentRevisionOutput, EventLogger, InquiryRecord, UserAction
+from tools import load_records, read_record, released_ids, search_passages
+
+
+# --- records & tools ---------------------------------------------------------
+
+def test_eight_records_load():
+    recs = load_records()
+    assert sorted(recs) == [f"D0{i}" for i in range(1, 9)]
+
+
+def test_phase_filtering_hides_late_records():
+    assert released_ids("09:15") == ["D01", "D02", "D03", "D04", "D05", "D06"]
+    assert read_record("D07", "09:15")["status"] == "not_available"
+    assert "record" not in read_record("D07", "09:15")
+    assert read_record("D07", "09:35")["status"] == "found"
+    res = search_passages("401 Unauthorized", "09:15")
+    assert res["status"] == "no_matches"
+    assert search_passages("401 Unauthorized", "09:35")["results"][0]["doc_id"] == "D07"
+
+
+def test_tool_statuses():
+    assert search_passages("", "09:15")["status"] == "tool_error"
+    assert read_record("D99", "09:15")["status"] == "not_found"
+    assert search_passages("contract tests skipped", "09:15")["status"] == "found"
+
+
+# --- schemas & baseline ---------------------------------------------------------
+
+def test_baseline_roundtrip():
+    rec = build_curated_baseline()
+    assert rec.version == 1 and rec.history == []
+    again = InquiryRecord.model_validate_json(rec.model_dump_json())
+    assert again == rec
+    assert set(rec.retrievals) == {"D01", "D02", "D03", "D04", "D05", "D06"}
+
+
+def test_committed_baseline_matches_curated():
+    from pathlib import Path
+
+    committed = InquiryRecord.model_validate_json(Path("baseline_0915.json").read_text())
+    curated = build_curated_baseline()
+    assert committed == curated, "baseline_0915.json is stale: run python scripts/build_baseline.py"
+
+
+def test_agent_output_schema_is_json_serialisable():
+    json.dumps(AgentRevisionOutput.model_json_schema())
+
+
+# --- agent + merge -------------------------------------------------------------
+
+def _release(rec: InquiryRecord) -> InquiryRecord:
+    rec = rec.model_copy(deep=True)
+    rec.phase = "09:35"
+    return rec
+
+
+def test_mock_0935_invalidates_projection_and_keeps_history():
+    base = _release(build_curated_baseline())
+    run = AgentRun(base, trigger="new_records", provider=MockProvider(), max_steps=8)
+    run.run_to_end()
+    new = run.finalize()
+    assert new.version == 2
+    assert len(new.history) == 1 and new.history[0]["version"] == 1
+    p1 = next(p for p in new.projections if p.id == "P1")
+    assert p1.status == "invalidated" and "D07" in p1.invalidated_by
+    assert any(p.id == "P3" and p.since_version == 2 for p in new.projections)
+    assert new.reliance == "not_reliable"
+    changes = {c.claim_id: c.change for c in new.latest_revision.changed_claims}
+    assert changes["C7"] == "added" and changes["C3"] == "revised"
+    assert "D07" in new.retrievals
+
+
+def test_step_budget_is_enforced():
+    base = _release(build_curated_baseline())
+    run = AgentRun(base, trigger="new_records", provider=MockProvider(), max_steps=2)
+    run.run_to_end()
+    assert run.tool_calls == 2
+    assert "limit" in run.stopping_reason
+
+
+def test_correction_persists_and_is_applied():
+    base = build_curated_baseline()
+    base.user_actions.append(UserAction(id="A1", action_type="correct", target="C6",
+                                        note="Security team took over certificate renewals last week."))
+    run = AgentRun(base, trigger="user_correction", provider=MockProvider())
+    run.run_to_end()
+    new = run.finalize()
+    assert any(c.claim_type == "user_provided" for c in new.claims)
+    assert any("Disputed by the practitioner" in q for q in new.claim("C6").qualifications)
+    assert new.user_actions[0].applied_in_version == 2
+    assert new.pending_actions() == []
+
+
+def test_stop_by_user():
+    base = _release(build_curated_baseline())
+    run = AgentRun(base, trigger="new_records", provider=MockProvider())
+    run.step()
+    run.stop()
+    new = run.finalize()
+    assert "Stopped by the practitioner" in new.latest_revision.stopping_reason
+    assert new.latest_revision.tool_calls == 1
+
+
+def test_event_logger(tmp_path):
+    log = EventLogger("P01", log_dir=tmp_path)
+    rec = build_curated_baseline()
+    log.log("view_change", record=rec, view="Evidence")
+    log.log("revision", record=rec, snapshot=True)
+    data = json.loads(log.path.read_text())
+    assert data["participant_id"] == "P01"
+    assert [e["event"] for e in data["events"]] == ["view_change", "revision"]
+    assert data["events"][1]["snapshot"]["version"] == 1

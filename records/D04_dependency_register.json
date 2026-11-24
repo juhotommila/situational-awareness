@@ -1,0 +1,15 @@
+{
+  "doc_id": "D04",
+  "title": "Aurora Dependency Register",
+  "source_type": "Wiki page",
+  "source_system": "Confluence",
+  "author_role": "Solution Architect",
+  "updated_at": "2025-02-24T11:12:00",
+  "release_phase": "09:15",
+  "definitions": [
+    {"term": "In progress", "meaning": "An owner has been named and work has started; does not imply a date."}
+  ],
+  "dependencies": [],
+  "context_note": "Register is updated at architecture syncs, which are held every two weeks. The sync planned for 10 Mar was cancelled.",
+  "content": "DEP-07 Meridian billing API v2. Meridian will retire API v1 on 31 March, so Aurora 3.2 must use v2. Status: Aurora client implemented against v2 specification. Sandbox credentials scoped for v2 requested from Meridian IT on 18 Feb; status pending as of 24 Feb. Owner: Solution Architect (our side), Meridian IT (their side).\n\nDEP-09 Payline payment-gateway TLS certificate. Current certificate expires 20 March. Renewal status: in progress – Infra. Note: renewal process for client-branded domains may require client-side action.\n\nDEP-11 Meridian SSO (Azure AD) configuration. Status: done, verified 12 Feb."
+}

@@ -1,0 +1,13 @@
+{
+  "doc_id": "D08",
+  "title": "Meridian before the 11:00 review",
+  "source_type": "Email",
+  "source_system": "Outlook",
+  "author_role": "Customer Success Manager (Meridian account)",
+  "updated_at": "2025-03-11T09:31:00",
+  "release_phase": "09:35",
+  "definitions": [],
+  "dependencies": ["D06", "D07"],
+  "context_note": "Second-hand report of an informal call with Meridian's PMO; not confirmed in writing by Meridian.",
+  "content": "Hi, quick heads-up before 11:00.\n\nI just spoke with Meridian's PMO. They heard there's 'something with credentials' and say their IT is on it and it should be sorted 'by end of week'. I don't know if that means Friday or earlier.\n\nThey also said they're expecting us to present go-live as confirmed today – their board pack already says 17 March and they'd rather not change it.\n\nOne more thing: I'm not sure whether the certificate issue Infra mentioned is the same thing as the credentials issue or something separate. Meridian's IT contact for both might be the same person, but I couldn't confirm.\n\nCan we talk before the review?"
+}

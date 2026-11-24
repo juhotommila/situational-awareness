@@ -1,0 +1,17 @@
+{
+  "doc_id": "D05",
+  "title": "Delivery Glossary & Definition of Done (customer projects)",
+  "source_type": "Process document",
+  "source_system": "SharePoint – Delivery Handbook",
+  "author_role": "Head of Delivery",
+  "updated_at": "2024-11-05T09:00:00",
+  "release_phase": "09:15",
+  "definitions": [
+    {"term": "Confirmed (Delivery usage)", "meaning": "Verified end-to-end in staging against the customer's systems and signed off by QA. Safe to communicate externally."},
+    {"term": "Complete", "meaning": "Confirmed and accepted by the customer where acceptance applies."},
+    {"term": "Green (external reporting)", "meaning": "All milestones due to date are Confirmed per this glossary and no High risks are open."}
+  ],
+  "dependencies": [],
+  "context_note": "Applies to all customer-facing reporting. Engineering and PMO teams maintain their own working vocabularies for internal use.",
+  "content": "Purpose. This glossary defines status terms used in reporting to customers and external stakeholders. Internal team vocabularies may differ; when internal reports are reused for external communication, statuses must be re-checked against these definitions.\n\nConfirmed: the deliverable has been verified end-to-end in staging against the customer's systems and signed off by QA. Code being merged or unit-tested is not sufficient.\n\nGreen (external): every milestone due to date is Confirmed in the sense above and no High risks are open. If any integration has not been verified end-to-end, report Amber with a stated condition.\n\nRisk rating: a risk that could stop go-live and has no named owner must be rated at least Medium."
+}
