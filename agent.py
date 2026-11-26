@@ -256,7 +256,7 @@ class GeminiProvider(Provider):
             except Exception as exc:
                 last_exc = exc
                 msg = str(exc)
-                transient = any(code in msg for code in ("429", "503", "500", "RESOURCE_EXHAUSTED", "UNAVAILABLE"))
+                transient = any(code in msg for code in ("429", "500", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED"))
                 if not transient:
                     raise
         assert last_exc is not None
