@@ -1,8 +1,8 @@
 {
   "doc_id": "D03",
-  "title": "CI/CD Pipeline Run – aurora-portal 3.2.0-rc4 (nightly)",
+  "title": "CI/CD pipeline run – customer-portal 3.2.0-rc4 (nightly)",
   "source_type": "Dashboard export",
-  "source_system": "GitLab CI pipeline dashboard",
+  "source_system": "CI pipeline dashboard",
   "author_role": "Automated (owned by Release Engineering)",
   "updated_at": "2025-03-11T06:05:00",
   "release_phase": "09:15",
@@ -10,6 +10,6 @@
     {"term": "PASSED (pipeline badge)", "meaning": "No stage failed. Skipped stages do not cause the overall badge to fail."}
   ],
   "dependencies": [],
-  "context_note": "Automated export; no human commentary attached.",
-  "content": "Pipeline #9127 for 3.2.0-rc4. Overall result: PASSED. Triggered: nightly schedule, 11 Mar 02:00. Duration 4h 05m.\n\nStage build: success. Stage unit-tests: success, 1,284 of 1,284 passed. Stage static-analysis: success, 0 blockers.\n\nStage staging-contract-tests (Meridian billing API v2 sandbox): SKIPPED. Reason: environment lock 'staging-shared' held by job perf-test-0310 (manual). Stage deploy-staging: success, rc4 deployed to staging at 06:04.\n\nArtifacts: aurora-portal-3.2.0-rc4.tar.gz, unit-test-report.html."
+  "context_note": "Automated export without human commentary.",
+  "content": "Pipeline #9127 for 3.2.0-rc4. Overall result: PASSED. Triggered: nightly schedule, 11 Mar 02:00. Duration: 4h 05m.\n\nStage build: success. Stage unit-tests: success, 1,284 of 1,284 passed. Stage static-analysis: success, 0 blockers.\n\nStage staging-contract-tests (billing API v2 sandbox): SKIPPED. Reason: environment lock 'staging-shared' held by job perf-test-0310 (manual). Stage deploy-staging: success, rc4 deployed to staging at 06:04.\n\nArtifacts: customer-portal-3.2.0-rc4.tar.gz, unit-test-report.html."
 }

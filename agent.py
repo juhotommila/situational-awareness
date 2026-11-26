@@ -56,9 +56,8 @@ Rules:
   and reply with a single line starting with 'CONCLUDE:' and the reason.
 """
 
-FINAL_SYSTEM = """You are the investigation agent inside a sensemaking support tool. Produce the revised account of the situation as JSON
-matching the given schema. The practitioner will examine every field, so be precise, concise, and honest about uncertainty.
-Write in plain, understated prose without filler or repetition.
+FINAL_SYSTEM = """You are the investigation agent inside a sensemaking support tool. Produce the revised account as JSON
+matching the given schema. Write in plain, neutral, factual sentences without filler or dramatic phrasing.
 
 Field rules:
 - claims: claim_type 'direct_record' only if a record states it; 'agent_inference' for your reasoning; 'user_provided' for content taken
@@ -72,7 +71,8 @@ Field rules:
   organisational knowledge). Name unresolved_owner where a role could resolve it.
 - competing_hypotheses: plausible alternative explanations, with what would resolve them.
 - what_changed: short bullets comparing this account with the previous one (or 'Initial account' if there was none).
-- addressed_user_actions: ids of the practitioner actions you took into account.
+- addressed_user_actions: ONLY include ids of pending practitioner actions that you actually examined and either incorporated into
+  the revised account or explicitly responded to (e.g. by flagging a conflict). Leave out any action you did not address.
 - reliance: whether D01 can be relied on for the external review, on the current evidence.
 """
 
@@ -105,6 +105,8 @@ def _actions_payload(record: InquiryRecord) -> List[Dict[str, Any]]:
 
 class Provider:
     mode: str = "mock"
+    model_name: str = ""
+    models_used: List[str] = []
 
     def start(self, run: "AgentRun") -> None: ...
 
@@ -125,9 +127,12 @@ class MockProvider(Provider):
     practitioner's note and folds the outcome into the account transparently."""
 
     mode = "mock"
+    model_name = "mock-scripted"
 
     def start(self, run: "AgentRun") -> None:
         from scenario_scripts import MOCK_0935_PLAN
+
+        self.models_used = [self.model_name]
 
         self.new_records = run.record.phase == "09:35" and "D07" not in run.record.retrievals
         plan: List[Tuple[str, str, Dict[str, Any]]] = []
@@ -228,6 +233,8 @@ class GeminiProvider(Provider):
         self.types = types
         self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=45_000))
         self.model = model
+        self.model_name = model
+        self.models_used: List[str] = []
         self.contents: List[Any] = []
         self.pending_text: List[str] = []
 
@@ -241,7 +248,11 @@ class GeminiProvider(Provider):
         last_exc: Optional[Exception] = None
         for m in models:
             try:
-                return self.client.models.generate_content(model=m, contents=contents, config=config)
+                resp = self.client.models.generate_content(model=m, contents=contents, config=config)
+                self.model_name = m
+                if m not in self.models_used:
+                    self.models_used.append(m)
+                return resp
             except Exception as exc:
                 last_exc = exc
                 msg = str(exc)
@@ -462,6 +473,8 @@ class AgentRun:
             steps=self.steps,
             stopping_reason=self.stopping_reason,
             agent_mode=self.mode,  # type: ignore[arg-type]
+            model_name=self.provider.model_name,
+            models_used=list(self.provider.models_used),
         )
 
 
@@ -471,6 +484,32 @@ def make_provider(mode: str, api_key: Optional[str] = None, model: Optional[str]
             raise ValueError("Gemini mode needs an API key (GEMINI_API_KEY).")
         return GeminiProvider(api_key=api_key, model=model or DEFAULT_MODEL)
     return MockProvider()
+
+
+def check_gemini_api(api_key: Optional[str], model: str = DEFAULT_MODEL) -> Tuple[bool, str]:
+    """Quick pre-interview connectivity check. Tests the requested model and
+    reports whether it (or the fallback model) responds."""
+    if not api_key:
+        return False, "No GEMINI_API_KEY configured."
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=15_000))
+    except Exception as exc:
+        return False, f"Client setup failed: {exc}"
+
+    candidates = [model] + (["gemini-3.5-flash-lite"] if model != "gemini-3.5-flash-lite" else [])
+    errors = []
+    for m in candidates:
+        try:
+            client.models.generate_content(model=m, contents="Reply OK.")
+            if m == model:
+                return True, f"Connected ({m})."
+            return True, f"{model} unavailable; fallback {m} responded."
+        except Exception as exc:
+            errors.append(f"{m}: {str(exc)[:110]}")
+    return False, " | ".join(errors)
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +530,7 @@ def build_curated_baseline() -> InquiryRecord:
         steps=BASELINE_STEPS,
         stopping_reason=BASELINE_STOPPING_REASON,
         agent_mode="curated",
+        model_name="curated-baseline",
     )
     # Fixed timestamps: the baseline must be identical for every participant.
     fixed = scenario_time("09:15")

@@ -1,16 +1,16 @@
 {
   "doc_id": "D01",
-  "title": "Weekly Status Report – Project Aurora (Release 3.2)",
+  "title": "Weekly status report – release 3.2",
   "source_type": "Status report",
-  "source_system": "PMO Portfolio Tool (export)",
-  "author_role": "Project Coordinator, PMO",
+  "source_system": "PMO reporting tool (export)",
+  "author_role": "Project coordinator, PMO",
   "updated_at": "2025-03-10T17:30:00",
   "release_phase": "09:15",
   "definitions": [
-    {"term": "Confirmed (PMO usage)", "meaning": "Milestone reported as done by the responsible team lead in the Monday update round."},
-    {"term": "Green", "meaning": "Overall status on track; no escalation requested by any team lead."}
+    {"term": "Confirmed (PMO)", "meaning": "Milestone reported as done by the responsible team lead in the Monday update round."},
+    {"term": "Green", "meaning": "Schedule on track; no escalation requested by any team lead."}
   ],
   "dependencies": ["D02", "D03", "D04"],
-  "context_note": "Compiled from team updates received by Mon 10 Mar 16:00. Intended for internal circulation; prepared ahead of the Meridian steering-group review on Tue 11 Mar 11:00.",
-  "content": "OVERALL STATUS: GREEN. Release 3.2 of the Meridian Energy customer self-service portal is CONFIRMED for go-live on Monday 17 March.\n\nMilestones. Development complete: Confirmed. Billing API v2 integration with Meridian: Confirmed. Data migration rehearsal: Complete (run on 6 March, 0 critical defects). User acceptance testing (UAT) with Meridian testers: scheduled 12–14 March. Go/No-Go meeting: 14 March 15:00.\n\nRisks. R-11 Meridian UAT tester availability: Medium, mitigated by recorded walkthrough sessions. R-14 Payline payment-gateway TLS certificate renewal: Low, handled by Infra. No High risks open.\n\nKey message for steering group: Aurora 3.2 is on track and confirmed for 17 March. No decisions required from Meridian at this time."
+  "context_note": "Compiled from team inputs received by Mon 10 Mar 16:00. Prepared for internal circulation ahead of the external review on Tue 11 Mar 11:00.",
+  "content": "OVERALL STATUS: GREEN. Release 3.2 of the customer self-service portal is CONFIRMED for go-live on Monday 17 March.\n\nMilestones. Development complete: Confirmed. Billing API v2 integration: Confirmed. Data migration rehearsal: Complete (run on 6 March, 0 critical defects). User acceptance testing (UAT) with customer testers: scheduled 12–14 March. Go/no-go meeting: 14 March 15:00.\n\nRisks. R-11 customer UAT tester availability: Medium, mitigated by recorded walkthroughs. R-14 payment-gateway TLS certificate renewal: Low, handled by Infrastructure. No High risks open.\n\nSummary for external review: release 3.2 is on track and confirmed for 17 March. No decisions required from the customer."
 }

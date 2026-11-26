@@ -1,15 +1,15 @@
 {
   "doc_id": "D07",
-  "title": "Staging Contract Test Report – Meridian billing API v2 (manual run)",
+  "title": "Staging contract test report – billing API v2 (manual run)",
   "source_type": "Test report / alert",
-  "source_system": "GitLab CI + QA alert channel",
-  "author_role": "QA Engineer (Release Engineering)",
+  "source_system": "CI pipeline and QA channel",
+  "author_role": "QA engineer (Release Engineering)",
   "updated_at": "2025-03-11T09:28:00",
   "release_phase": "09:35",
   "definitions": [
-    {"term": "BLOCKED for UAT", "meaning": "The release candidate may not be handed to customer testers until the blocking issue is resolved and re-tested."}
+    {"term": "BLOCKED for UAT", "meaning": "The release candidate may not be handed to customer testers until the blocking issue is fixed and re-tested."}
   ],
   "dependencies": ["D03", "D04"],
   "context_note": "Manual re-run triggered at 09:05 after the nightly run skipped this stage (see D03).",
-  "content": "Manual run of stage staging-contract-tests for 3.2.0-rc4, started 09:05, finished 09:26.\n\nResult: FAILED. 12 of 19 contract tests passed, 7 failed. All 7 failures are on /v2/invoices and /v2/payments endpoints and return HTTP 401 Unauthorized. The sandbox credentials configured in staging appear to be scoped for API v1 only.\n\nImpact: release candidate rc4 is BLOCKED for UAT until valid v2 sandbox credentials are installed and the contract tests pass. Engineering estimates half a day of re-testing once credentials arrive.\n\nRaised by QA at 09:28. Tagged: Engineering Lead, Solution Architect, PMO."
+  "content": "Manual run of stage staging-contract-tests for 3.2.0-rc4, started 09:05, finished 09:26.\n\nResult: FAILED. 12 of 19 contract tests passed, 7 failed. All 7 failures occur on /v2/invoices and /v2/payments endpoints with HTTP 401 Unauthorized. The sandbox credentials configured in staging appear to be scoped for API v1 only.\n\nImpact: release candidate rc4 is BLOCKED for UAT until valid v2 sandbox credentials are installed and the contract tests pass. Engineering estimates half a day of re-testing once credentials arrive.\n\nRaised by QA at 09:28. Notified: Engineering lead, Solution architect, PMO."
 }

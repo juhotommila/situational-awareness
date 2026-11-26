@@ -1,7 +1,7 @@
 import json
 
 from agent import AgentRun, MockProvider, build_curated_baseline
-from state import AgentRevisionOutput, EventLogger, InquiryRecord, UserAction
+from state import AgentRevisionOutput, EventLogger, InquiryRecord, UserAction, merge_revision
 from tools import load_records, read_record, released_ids, search_passages
 
 
@@ -10,6 +10,13 @@ from tools import load_records, read_record, released_ids, search_passages
 def test_eight_records_load():
     recs = load_records()
     assert sorted(recs) == [f"D0{i}" for i in range(1, 9)]
+
+
+def test_records_use_neutral_language():
+    recs = load_records()
+    combined = "\n".join(json.dumps(r.model_dump()) for r in recs.values())
+    for forbidden in ("Aurora", "Meridian", "Payline", "steering-group", "board pack"):
+        assert forbidden not in combined, f"Found {forbidden!r} in scenario records"
 
 
 def test_phase_filtering_hides_late_records():
@@ -33,6 +40,7 @@ def test_tool_statuses():
 def test_baseline_roundtrip():
     rec = build_curated_baseline()
     assert rec.version == 1 and rec.history == []
+    assert rec.latest_revision.model_name == "curated-baseline"
     again = InquiryRecord.model_validate_json(rec.model_dump_json())
     assert again == rec
     assert set(rec.retrievals) == {"D01", "D02", "D03", "D04", "D05", "D06"}
@@ -65,6 +73,8 @@ def test_mock_0935_invalidates_projection_and_keeps_history():
     new = run.finalize()
     assert new.version == 2
     assert len(new.history) == 1 and new.history[0]["version"] == 1
+    assert new.latest_revision.model_name == "mock-scripted"
+    assert new.latest_revision.models_used == ["mock-scripted"]
     p1 = next(p for p in new.projections if p.id == "P1")
     assert p1.status == "invalidated" and "D07" in p1.invalidated_by
     assert any(p.id == "P3" and p.since_version == 2 for p in new.projections)
@@ -92,6 +102,9 @@ def test_correction_persists_and_is_applied():
     assert any(c.claim_type == "user_provided" for c in v2.claims)
     assert any("Disputed by the practitioner" in q for q in v2.claim("C6").qualifications)
     assert v2.user_actions[0].applied_in_version == 2
+    assert v2.user_actions[0].not_addressed_in_versions == []
+    assert v2.latest_revision.addressed_user_actions == ["A1"]
+    assert v2.latest_revision.unaddressed_user_actions == []
     assert v2.pending_actions() == []
 
     # Correction claim must survive a subsequent 09:35 revision as well.
@@ -99,6 +112,50 @@ def test_correction_persists_and_is_applied():
     run2.run_to_end()
     v3 = run2.finalize()
     assert any(c.claim_type == "user_provided" and "Security team" in c.text for c in v3.claims)
+
+
+def test_unaddressed_correction_stays_pending_and_is_flagged():
+    base = build_curated_baseline()
+    base.user_actions.append(UserAction(id="A1", action_type="correct", target="C4",
+                                        note="Contract tests actually ran and passed."))
+    base.user_actions.append(UserAction(id="A2", action_type="redirect",
+                                        note="Check certificate owner."))
+
+    # Model claims to have addressed only A2, ignoring A1.
+    out = AgentRevisionOutput(
+        situation_summary=base.situation_summary,
+        reliance=base.reliance,
+        overall_assessment=base.overall_assessment,
+        claims=base.claims,
+        projections=base.projections,
+        limitations=base.limitations,
+        competing_hypotheses=base.latest_revision.competing_hypotheses,
+        what_changed=["Checked certificate owner."],
+        addressed_user_actions=["A2"],
+    )
+    v2 = merge_revision(
+        base,
+        out,
+        trigger="user_correction",
+        trigger_note="Correction test",
+        steps=[],
+        stopping_reason="Concluded.",
+        agent_mode="gemini",
+        model_name="gemini-3.5-flash-lite",
+        models_used=["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+    )
+
+    a1, a2 = v2.user_actions
+    assert a1.applied_in_version is None
+    assert a1.not_addressed_in_versions == [2]
+    assert a2.applied_in_version == 2
+    assert a2.not_addressed_in_versions == []
+    # A1 remains pending so it is sent to the model again on the next run.
+    assert [a.id for a in v2.pending_actions()] == ["A1"]
+    assert v2.latest_revision.addressed_user_actions == ["A2"]
+    assert v2.latest_revision.unaddressed_user_actions == ["A1"]
+    assert v2.latest_revision.model_name == "gemini-3.5-flash-lite"
+    assert v2.latest_revision.models_used == ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
 
 
 def test_stop_by_user():

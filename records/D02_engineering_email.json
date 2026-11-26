@@ -1,15 +1,15 @@
 {
   "doc_id": "D02",
-  "title": "RE: Aurora 3.2 – status inputs for Monday report",
+  "title": "RE: Release 3.2 – status inputs for Monday report",
   "source_type": "Email thread",
-  "source_system": "Outlook",
-  "author_role": "Engineering Lead",
+  "source_system": "Email",
+  "author_role": "Engineering lead",
   "updated_at": "2025-03-10T15:48:00",
   "release_phase": "09:15",
   "definitions": [
-    {"term": "Confirmed (Engineering usage)", "meaning": "Code merged to main with all unit tests passing."}
+    {"term": "Confirmed (Engineering)", "meaning": "Code merged to main with all unit tests passing."}
   ],
   "dependencies": ["D03"],
-  "context_note": "Reply to the PMO's weekly request for status inputs. Earlier messages in the thread are routine reminders.",
-  "content": "Hi, inputs for the report below.\n\nDevelopment: all 3.2 stories are done and merged, so you can mark dev complete as confirmed.\n\nBilling API v2 integration: confirmed. PR #482 (billing client rewrite for API v2) was merged to main on Friday, all unit tests green. The contract tests against the Meridian sandbox will run in staging as part of the nightly pipeline on Monday night, so we should have that by Tuesday morning.\n\nPerformance: perf test environment is booked Monday evening, will share numbers later in the week.\n\nNothing blocking from our side. Cheers."
+  "context_note": "Reply to the PMO weekly request for status inputs. Earlier messages in the thread are routine reminders.",
+  "content": "Inputs for the Monday report:\n\nDevelopment: all 3.2 items are merged, so development complete can be marked confirmed.\n\nBilling API v2 integration: confirmed. PR #482 (billing client update for API v2) was merged to main on Friday with all unit tests passing. Contract tests against the customer sandbox are scheduled to run in staging in Monday's nightly pipeline, so results should be ready Tuesday morning.\n\nPerformance: test environment is booked Monday evening; numbers will follow later in the week.\n\nNo blockers from engineering."
 }

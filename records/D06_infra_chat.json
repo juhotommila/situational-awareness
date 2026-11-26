@@ -1,13 +1,13 @@
 {
   "doc_id": "D06",
-  "title": "#aurora-infra – chat excerpt (Payline certificate)",
+  "title": "Infrastructure channel – chat excerpt (TLS certificate)",
   "source_type": "Chat export",
-  "source_system": "Microsoft Teams",
-  "author_role": "Infrastructure Engineer",
+  "source_system": "Team chat",
+  "author_role": "Infrastructure engineer",
   "updated_at": "2025-03-10T18:22:00",
   "release_phase": "09:15",
   "definitions": [],
   "dependencies": ["D04"],
-  "context_note": "Partial export: the thread continues with 2 replies that were not included in the export.",
-  "content": "[18:22] Infrastructure Engineer: fyi re the Payline cert for the Meridian portal domain – renewal needs a signed CSR from the client side, not from us. Their domain, their CA account.\n\n[18:23] Infrastructure Engineer: I pinged someone at Meridian last week, no answer yet. Not sure who owns this on our side now that the previous security contact left – maybe Security team? Or the account team?\n\n[18:24] Infrastructure Engineer: anyway it expires on the 20th. If it lapses, card payments in the portal stop working.\n\n[2 more replies not included in this export]"
+  "context_note": "Partial export: 2 subsequent replies in the thread are not included.",
+  "content": "[18:22] Infrastructure engineer: Regarding the payment-gateway TLS certificate for the customer portal domain: renewal requires a signed CSR from the customer side. It is their domain and their CA account.\n\n[18:23] Infrastructure engineer: I contacted someone at the customer last week, with no reply so far. It is unclear who owns this internally since the previous security contact left – possibly Security or the account team.\n\n[18:24] Infrastructure engineer: The certificate expires on 20 March. If it lapses, card payments in the portal stop working.\n\n[2 more replies not included in this export]"
 }

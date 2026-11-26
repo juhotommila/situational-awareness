@@ -69,7 +69,8 @@ Each investigation runs inside an `AgentRun` object wrapping a `Provider` (`Gemi
 - Snapshots the previous version into `record.history` (viewable in **Investigation → Earlier versions**).
 - Computes structured `ClaimChange` diffs (`added`, `revised`, `withdrawn`) for the **Changes in vN** banner (DP3).
 - Retains invalidated or retired projections alongside active ones so broken assumptions stay visible (DP4).
-- Marks pending practitioner corrections/redirects with `applied_in_version` and logs the full snapshot via `EventLogger` (Chapter 5 traceability).
+- Marks pending practitioner corrections/redirects as applied **only** when listed in `output.addressed_user_actions`; any unaddressed item is flagged as `not addressed in vN` and kept pending for the next run (DP6).
+- Records `model_name` and `models_used` on every `Revision` (including fallback transitions) and logs the full snapshot via `EventLogger` (Chapter 5 traceability).
 
 ---
 
@@ -79,9 +80,9 @@ Each investigation runs inside an `AgentRun` object wrapping a `Provider` (`Gemi
 |---|---|
 | `app.py` | Three-view practitioner interface (**Situation**, **Evidence**, **Investigation**), persistent **Direction** panel (DP6), and collapsible **Researcher controls** sidebar. |
 | `state.py` | Pydantic v2 schemas (`InquiryRecord`, `Claim`, `Projection`, `Revision`, `Limitation`, `UserAction`, `ToolCallLog`), `merge_revision` history/invalidation logic, and `EventLogger`. |
-| `agent.py` | Step-wise, resumable ReAct investigation loop (`GeminiProvider` and `MockProvider`) with configurable tool-call budget and structured JSON validation. |
+| `agent.py` | Step-wise, resumable ReAct investigation loop (`GeminiProvider` and `MockProvider`) with configurable tool-call budget, pre-interview API check, and structured JSON validation. |
 | `tools.py` | Phase-filtered `search_passages` (BM25) and `read_record` tools returning explicit statuses (`found`, `no_matches`, `not_available`, `not_found`, `tool_error`). |
-| `records/D01_*.json` … `D08_*.json` | The 8 Project Aurora (Release 3.2) scenario records split into `09:15` (`D01–D06`) and `09:35` (`D07–D08`). |
+| `records/D01_*.json` … `D08_*.json` | Eight neutral release-3.2 scenario records split into `09:15` (`D01–D06`) and `09:35` (`D07–D08`; hidden until released). |
 | `baseline_0915.json` | Cached deterministic `09:15` baseline loaded at session start and reset. Rebuild via `python scripts/build_baseline.py`. |
 | `logs/` | Auto-saved `participant_<id>_<session>.json` event logs with full `InquiryRecord` snapshots (gitignored). |
 
@@ -92,7 +93,7 @@ Each investigation runs inside an `AgentRun` object wrapping a `Provider` (`Gemi
 1. **Before the participant arrives:**
    - Open the **Researcher controls** sidebar (`>` top-left).
    - Enter the **Participant ID** (e.g. `P01`) and click **New session**.
-   - Confirm **Mode** (`Live Gemini` or `Scripted (offline)`) and **Max tool calls**.
+   - Confirm **Mode** is set to **Live Gemini** (scripted mode is for offline demos only and cannot evaluate corrections) and click **Check API connection**.
    - Collapse the sidebar so only the practitioner interface is visible.
 2. **Phase 1 (`09:15` baseline):**
    - Let the participant inspect **Situation**, click inline record citations (`D01`–`D06`) into **Evidence**, inspect **Investigation**, and optionally submit a correction or redirect.

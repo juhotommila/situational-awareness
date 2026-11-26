@@ -1,4 +1,4 @@
-"""Inquiry state for the "Stay in the Know" prototype.
+"""Inquiry state for the situational awareness prototype.
 
 The `InquiryRecord` is the single persistent object behind the practitioner
 interface. Its fields map onto the design principles:
@@ -31,8 +31,8 @@ PHASE_ORDER: List[str] = ["09:15", "09:35"]
 SCENARIO_DATE = "2025-03-11"
 
 INQUIRY_QUESTION = (
-    "Can the internal status report (D01) be relied upon as the basis for the "
-    "11:00 Meridian steering-group review of Project Aurora release 3.2?"
+    "Can the internal status report (D01) be relied upon for the "
+    "11:00 external review of release 3.2?"
 )
 
 
@@ -130,6 +130,10 @@ class Revision(BaseModel):
     created_at: str = Field(default_factory=now_iso)
     scenario_time: str = ""
     agent_mode: AgentMode = "mock"
+    model_name: str = ""
+    models_used: List[str] = Field(default_factory=list)
+    addressed_user_actions: List[str] = Field(default_factory=list)
+    unaddressed_user_actions: List[str] = Field(default_factory=list)
     what_changed: List[str] = Field(default_factory=list)
     changed_claims: List[ClaimChange] = Field(default_factory=list)
     competing_hypotheses: List[CompetingHypothesis] = Field(default_factory=list)
@@ -188,6 +192,7 @@ class UserAction(BaseModel):
     note: str = ""
     target: str = ""  # claim id or record id, optional
     applied_in_version: Optional[int] = None
+    not_addressed_in_versions: List[int] = Field(default_factory=list)
 
 
 ToolStatus = Literal["found", "no_matches", "not_available", "not_found", "tool_error", "concluded"]
@@ -290,6 +295,8 @@ def merge_revision(
     steps: List[ToolCallLog],
     stopping_reason: str,
     agent_mode: AgentMode,
+    model_name: str = "",
+    models_used: Optional[List[str]] = None,
 ) -> InquiryRecord:
     """Produce the next version of the record. Old states are kept in `history`;
     invalidated or dropped projections stay visible rather than disappearing."""
@@ -345,9 +352,17 @@ def merge_revision(
     new.overall_assessment = output.overall_assessment
     new.limitations = list(output.limitations)
 
+    addressed_ids = set(output.addressed_user_actions)
+    addressed_this_rev: List[str] = []
+    unaddressed_this_rev: List[str] = []
     for a in new.user_actions:
         if a.applied_in_version is None and a.action_type in ("correct", "redirect"):
-            a.applied_in_version = new_version
+            if a.id in addressed_ids:
+                a.applied_in_version = new_version
+                addressed_this_rev.append(a.id)
+            else:
+                a.not_addressed_in_versions.append(new_version)
+                unaddressed_this_rev.append(a.id)
 
     stamped_steps = []
     for s in steps:
@@ -358,6 +373,7 @@ def merge_revision(
             new.retrievals[str(s.args.get("doc_id"))] = scenario_time(record.phase)
     new.tool_log = record.tool_log + stamped_steps
 
+    used_models = list(models_used) if models_used is not None else ([model_name] if model_name else [])
     new.revisions = record.revisions + [
         Revision(
             version=new_version,
@@ -365,6 +381,10 @@ def merge_revision(
             trigger_note=trigger_note,
             scenario_time=scenario_time(record.phase),
             agent_mode=agent_mode,
+            model_name=model_name,
+            models_used=used_models,
+            addressed_user_actions=addressed_this_rev,
+            unaddressed_user_actions=unaddressed_this_rev,
             what_changed=list(output.what_changed),
             changed_claims=changes,
             competing_hypotheses=list(output.competing_hypotheses),

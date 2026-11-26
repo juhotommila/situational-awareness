@@ -1,4 +1,4 @@
-"""Stay in the Know — practitioner interface and researcher controls.
+"""Inquiry workspace — practitioner interface and researcher controls.
 
 Run with:  streamlit run app.py
 """
@@ -9,20 +9,20 @@ import html
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from agent import DEFAULT_MAX_STEPS, DEFAULT_MODEL, AgentRun, build_curated_baseline, make_provider
-from state import Claim, EventLogger, InquiryRecord, Projection, ToolCallLog, UserAction, scenario_time
+from agent import DEFAULT_MAX_STEPS, DEFAULT_MODEL, AgentRun, build_curated_baseline, check_gemini_api, make_provider
+from state import Claim, EventLogger, InquiryRecord, Projection, Revision, ToolCallLog, UserAction, scenario_time
 from tools import is_released, load_records
 
 ROOT = Path(__file__).parent
 load_dotenv(ROOT / ".env")
 
 st.set_page_config(
-    page_title="Stay in the Know",
+    page_title="Inquiry Workspace",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -452,8 +452,9 @@ def init_state() -> None:
     ss.max_steps = DEFAULT_MAX_STEPS
     ss.released_at = None
     ss.agent_error = None
+    ss.api_check = None
     ss.toast = None
-    log("session_start", snapshot=True, agent_mode=ss.agent_mode)
+    log("session_start", snapshot=True, agent_mode=ss.agent_mode, model=ss.model)
 
 
 # ---------------------------------------------------------------------------
@@ -566,14 +567,38 @@ def cb_new_session() -> None:
     ss.participant_id = pid
     ss.logger = EventLogger(pid)
     cb_reset()
-    log("session_start", snapshot=True, agent_mode=ss.agent_mode)
+    log("session_start", snapshot=True, agent_mode=ss.agent_mode, model=ss.model)
     ss.toast = f"Session started: {pid}"
 
 
 def cb_retry_mock() -> None:
     ss.agent_mode = "mock"
     ss.agent_error = None
-    log("agent_mode_change", mode="mock", reason="retry_after_error")
+    log("agent_mode_change", mode="mock", model="mock-scripted", reason="retry_after_error")
+
+
+def cb_check_api() -> None:
+    ok, msg = check_gemini_api(get_api_key(), ss.model)
+    ss.api_check = (ok, msg)
+    log("api_check", ok=ok, model=ss.model, detail=msg)
+
+
+def _action_status(a: UserAction) -> Tuple[str, str]:
+    if a.applied_in_version is not None:
+        return f"applied in v{a.applied_in_version}", "b-new"
+    if a.not_addressed_in_versions:
+        return f"not addressed in v{a.not_addressed_in_versions[-1]}", "b-rev"
+    if a.action_type in ("pause", "resume", "stop"):
+        return "–", ""
+    return "pending", "b-retired"
+
+
+def _revision_model_label(rev: Revision) -> str:
+    if rev.models_used:
+        return " -> ".join(rev.models_used)
+    if rev.model_name:
+        return rev.model_name
+    return MODE_LABEL.get(rev.agent_mode, rev.agent_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -597,7 +622,17 @@ def _finalize(run: AgentRun) -> None:
     ss.record = new
     ss.active_run = None
     rev = new.latest_revision
-    log("revision", snapshot=True, trigger=rev.trigger, mode=rev.agent_mode, stopping_reason=rev.stopping_reason)
+    log(
+        "revision",
+        snapshot=True,
+        trigger=rev.trigger,
+        mode=rev.agent_mode,
+        model_name=rev.model_name,
+        models_used=rev.models_used,
+        addressed_user_actions=rev.addressed_user_actions,
+        unaddressed_user_actions=rev.unaddressed_user_actions,
+        stopping_reason=rev.stopping_reason,
+    )
     if ss.view != "Situation":
         log("view_change", view="Situation", from_view=ss.view, via="auto_after_revision")
     ss.view = ss.last_view = "Situation"
@@ -620,7 +655,7 @@ def process_op() -> None:
         run = AgentRun(ss.record, trigger=trigger, trigger_note=note, provider=provider, max_steps=ss.max_steps)
         ss.active_run = run
         ss.agent_error = None
-        log("agent_run_start", trigger=trigger, note=note, mode=run.mode, step_mode=ss.step_mode, max_steps=ss.max_steps)
+        log("agent_run_start", trigger=trigger, note=note, mode=run.mode, model=ss.model, step_mode=ss.step_mode, max_steps=ss.max_steps)
         if ss.step_mode:
             return
         kind = "run_to_end"
@@ -663,7 +698,7 @@ def render_header(rec: InquiryRecord) -> None:
         f"""
 <div class="mast">
   <div class="mast-top">
-    <div class="mast-meta">Project Aurora &middot; <span class="mono"><b>{rec.phase}</b></span> &middot; <span class="mono">v{rec.version}</span> &middot; {n_avail}/{len(load_records())} records</div>
+    <div class="mast-meta">Release 3.2 &middot; <span class="mono"><b>{rec.phase}</b></span> &middot; <span class="mono">v{rec.version}</span> &middot; {n_avail} records</div>
     <span class="rel rel-{rec.reliance}">D01: {RELIANCE_LABEL[rec.reliance]}</span>
   </div>
   <h1>{E(rec.question)}</h1>
@@ -694,10 +729,22 @@ def render_changed(rec: InquiryRecord) -> None:
         return
     bullets = "".join(f"<li>{E(b)}</li>" for b in rev.what_changed)
     trig = TRIGGER_LABEL.get(rev.trigger, rev.trigger)
+    unaddressed_html = ""
+    if rev.unaddressed_user_actions:
+        by_id = {a.id: a for a in rec.user_actions}
+        notes = "; ".join(
+            E(by_id[aid].note) if aid in by_id else E(aid)
+            for aid in rev.unaddressed_user_actions
+        )
+        unaddressed_html = (
+            f'<div class="conflict" style="margin-top:.5rem">'
+            f'<b>Not addressed in v{rev.version}:</b> {notes} (kept pending for the next run).'
+            f'</div>'
+        )
     st.markdown(
         f"""<div class="changed">
 <div class="changed-head">Changes in v{rev.version} &middot; {E(trig)} ({rev.scenario_time[-8:-3]})</div>
-<ul>{bullets}</ul></div>""",
+<ul>{bullets}</ul>{unaddressed_html}</div>""",
         unsafe_allow_html=True,
     )
     if rev.changed_claims:
@@ -838,12 +885,6 @@ def render_evidence(rec: InquiryRecord) -> None:
     for doc_id in order:
         r = records[doc_id]
         if not is_released(r, rec.phase):
-            with st.container(key=f"card-locked-{doc_id}"):
-                st.markdown(
-                    f'<div class="rec-head"><span class="b b-id">{doc_id}</span>'
-                    f'<span class="rec-type">Not available until {r.release_phase}</span></div>',
-                    unsafe_allow_html=True,
-                )
             continue
         focus = doc_id == ss.focus_doc
         retrieved = rec.retrievals.get(doc_id)
@@ -895,7 +936,7 @@ def render_investigation(rec: InquiryRecord) -> None:
     for rev in reversed(rec.revisions):
         steps = [s for s in rec.tool_log if s.version == rev.version]
         call_word = "call" if rev.tool_calls == 1 else "calls"
-        title = f"v{rev.version} · {TRIGGER_LABEL.get(rev.trigger, rev.trigger)} · {rev.tool_calls} {call_word} · {MODE_LABEL.get(rev.agent_mode, rev.agent_mode)}"
+        title = f"v{rev.version} · {TRIGGER_LABEL.get(rev.trigger, rev.trigger)} · {rev.tool_calls} {call_word} · {_revision_model_label(rev)}"
         with st.expander(title, expanded=rev.version == rec.version):
             st.markdown(
                 f'<div class="meta">{E(rev.trigger_note)}</div>{timeline_html(steps)}'
@@ -914,7 +955,7 @@ def render_investigation(rec: InquiryRecord) -> None:
                     "Type": a.action_type,
                     "Target": a.target or "–",
                     "Note": a.note,
-                    "Applied": f"v{a.applied_in_version}" if a.applied_in_version else ("–" if a.action_type in ("pause", "resume") else "pending"),
+                    "Status": _action_status(a)[0],
                 }
                 for a in acts
             ],
@@ -989,8 +1030,9 @@ def render_direction_panel(rec: InquiryRecord) -> None:
         if recent:
             st.markdown('<div class="meta" style="margin:.6rem 0 .25rem">Active direction</div>', unsafe_allow_html=True)
             for a in reversed(recent):
-                applied = f"v{a.applied_in_version}" if a.applied_in_version else "pending"
-                st.markdown(f'<div class="lim-item"><span class="b b-user">{a.action_type}</span>{E(a.note)}<div class="meta">{applied}</div></div>', unsafe_allow_html=True)
+                st_label, st_cls = _action_status(a)
+                st_html = f'<span class="b {st_cls}" style="margin-top:.25rem">{E(st_label)}</span>' if st_cls else f'<div class="meta">{E(st_label)}</div>'
+                st.markdown(f'<div class="lim-item"><span class="b b-user">{a.action_type}</span>{E(a.note)}<div>{st_html}</div></div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1015,15 +1057,26 @@ def render_sidebar(rec: InquiryRecord) -> None:
             st.caption(f"Released {ss.released_at}")
         st.button("Reset to 09:15", key="btn_reset", on_click=cb_reset, use_container_width=True)
 
-    with sb.expander("Agent"):
+    with sb.expander("Agent", expanded=True):
         has_key = bool(get_api_key())
-        st.radio("Mode", ["mock", "gemini"], key="agent_mode",
-                 format_func=lambda m: "Scripted (offline)" if m == "mock" else "Live Gemini",
-                 on_change=lambda: log("agent_mode_change", mode=ss.agent_mode))
-        if ss.agent_mode == "gemini" and not has_key:
+        st.radio(
+            "Mode",
+            ["mock", "gemini"],
+            key="agent_mode",
+            format_func=lambda m: "Scripted (offline demo)" if m == "mock" else "Live Gemini",
+            on_change=lambda: log("agent_mode_change", mode=ss.agent_mode, model=ss.model),
+        )
+        if ss.agent_mode == "mock":
+            st.caption("For offline demos only; scripted mode cannot evaluate corrections. Use Live Gemini for interviews.")
+        elif not has_key:
             st.warning("GEMINI_API_KEY not set.")
         st.text_input("Model", key="model")
         st.slider("Max tool calls", 2, 12, key="max_steps")
+        if ss.agent_mode == "gemini":
+            st.button("Check API connection", key="btn_check_api", on_click=cb_check_api, use_container_width=True)
+            if ss.api_check is not None:
+                ok, msg = ss.api_check
+                (st.success if ok else st.error)(msg)
 
     with sb.expander("Export", expanded=True):
         st.download_button("Session log (JSON)", ss.logger.to_json(), file_name=ss.logger.path.name,
